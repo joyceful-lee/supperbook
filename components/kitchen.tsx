@@ -26,6 +26,12 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { examples } from "@/lib/examples";
 import {
+  matchesRecipeFilter,
+  mergeImportedRecipe,
+  photoSource,
+  type Collection,
+} from "@/lib/recipe-management";
+import {
   amount,
   normalizeName,
   shoppingList,
@@ -35,12 +41,19 @@ import {
   type Recipe,
 } from "@/lib/domain";
 type Snapshot = {
+  collections: Collection[];
   recipes: Recipe[];
   ingredients: Ingredient[];
   meals: Meals;
   checked: string[];
 };
-type Modal = "import" | "auth" | "ingredient" | null;
+type Modal =
+  | "import"
+  | "auth"
+  | "ingredient"
+  | "collections"
+  | "confirmDelete"
+  | null;
 const categories = [
   "Produce",
   "Pantry",
@@ -74,6 +87,7 @@ function FoodImage({
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
   return src && !failed ? (
     <img
       className={className}
@@ -91,6 +105,7 @@ function FoodImage({
 export default function Kitchen() {
   const { data: session, isPending } = authClient.useSession();
   const [data, setData] = useState<Snapshot>({
+    collections: [],
     recipes: [],
     ingredients: [],
     meals: {},
@@ -114,6 +129,15 @@ export default function Kitchen() {
     [ingredientCategory, setIngredientCategory] = useState("Produce"),
     [matches, setMatches] = useState<Ingredient[]>([]),
     [ingredientLine, setIngredientLine] = useState<number | null>(null);
+  const [collectionName, setCollectionName] = useState("");
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(
+    null,
+  );
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: "recipe" | "collection";
+    id: string;
+    name: string;
+  } | null>(null);
   const stateQueue = useRef(Promise.resolve());
   async function api(body: unknown) {
     const response = await fetch("/api/kitchen", {
@@ -131,7 +155,13 @@ export default function Kitchen() {
   }
   useEffect(() => {
     if (!session?.user) {
-      setData({ recipes: [], ingredients: [], meals: {}, checked: [] });
+      setData({
+        recipes: [],
+        collections: [],
+        ingredients: [],
+        meals: {},
+        checked: [],
+      });
       return;
     }
     let active = true;
@@ -168,14 +198,12 @@ export default function Kitchen() {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [busy]);
-  const preview = !session?.user || data.recipes.length === 0;
+  const preview = !session?.user || (data.recipes.length === 0 && filter === "All recipes");
   const recipes = preview ? examples : data.recipes;
   const visible = useMemo(() => {
     let list = recipes.filter(
       (r) =>
-        (filter === "All recipes" ||
-          (filter === "Favorites" && r.favorite) ||
-          r.collection === filter) &&
+        matchesRecipeFilter(r, filter) &&
         `${r.title} ${r.description} ${r.ingredients.map((i) => i.name).join(" ")}`
           .toLowerCase()
           .includes(search.toLowerCase()),
@@ -186,9 +214,20 @@ export default function Kitchen() {
       list = [...list].sort((a, b) => a.title.localeCompare(b.title));
     return list;
   }, [recipes, filter, search, sort]);
-  const shopping = shoppingList(data.recipes, data.meals, data.ingredients);
-  const collections = [...new Set(recipes.map((r) => r.collection))];
-  const selected = data.recipes.filter((r) => data.meals[r.id]);
+  const shopping = shoppingList(
+    data.recipes.filter((r) => !r.archived),
+    data.meals,
+    data.ingredients,
+  );
+  const collections = session?.user
+    ? [
+        ...data.collections.map((c) => c.name),
+        ...(data.recipes.some((r) => r.collection === "Unfiled")
+          ? ["Unfiled"]
+          : []),
+      ]
+    : [...new Set(examples.map((r) => r.collection))];
+  const selected = data.recipes.filter((r) => !r.archived && data.meals[r.id]);
   function requireUser() {
     if (session?.user) return true;
     setAuthMode("signin");
@@ -387,13 +426,115 @@ export default function Kitchen() {
       setBusy(false);
     }
   }
-  async function deleteRecipe(recipe: Recipe) {
+  function deleteRecipe(recipe: Recipe) {
+    setError("");
+    setDeleteTarget({ kind: "recipe", id: recipe.id, name: recipe.title });
+    setModal("confirmDelete");
+  }
+  async function performDelete() {
+    if (!deleteTarget) return;
     setBusy(true);
+    setError("");
     try {
-      const result = await api({ action: "deleteRecipe", id: recipe.id });
+      const result = await api({
+        action:
+          deleteTarget.kind === "recipe" ? "deleteRecipe" : "deleteCollection",
+        id: deleteTarget.id,
+      });
       setData(result);
-      setDetail(null);
-      setToast("Recipe removed from your collection.");
+      if (deleteTarget.kind === "recipe") setDetail(null);
+      if (deleteTarget.kind === "collection" && filter === deleteTarget.name)
+        setFilter("All recipes");
+      setModal(deleteTarget.kind === "collection" ? "collections" : null);
+      setToast(
+        deleteTarget.kind === "recipe"
+          ? "Recipe permanently deleted."
+          : "Collection deleted. Its recipes are now Unfiled.",
+      );
+      setDeleteTarget(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function archiveRecipe(recipe: Recipe) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api({
+        action: "archiveRecipe",
+        id: recipe.id,
+        archived: !recipe.archived,
+      });
+      setData(result);
+      setDetail((current) =>
+        current?.id === recipe.id
+          ? result.recipes.find((r: Recipe) => r.id === recipe.id) || null
+          : current,
+      );
+      setToast(
+        recipe.archived
+          ? "Recipe restored to your collection."
+          : "Recipe archived and removed from the meal plan.",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function saveCollection(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api({
+        action: editingCollectionId ? "renameCollection" : "createCollection",
+        id: editingCollectionId,
+        name: collectionName,
+      });
+      if (editingCollectionId) {
+        const previous = data.collections.find(
+          (c) => c.id === editingCollectionId,
+        );
+        if (previous?.name === filter)
+          setFilter(
+            result.collections.find(
+              (c: Collection) => c.id === editingCollectionId,
+            )?.name || "All recipes",
+          );
+      }
+      setData(result);
+      setEditingCollectionId(null);
+      setCollectionName("");
+      setToast("Collection saved.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function importOriginal() {
+    if (!draft || !requireUser()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api({
+        action: "import",
+        url: draft.sourceUrl.trim(),
+      });
+      setDraft(
+        mergeImportedRecipe(draft, {
+          ...result.draft,
+          ingredients: result.draft.ingredients.length
+            ? result.draft.ingredients
+            : emptyRecipe().ingredients,
+        }),
+      );
+      setToast(
+        "Recipe details imported. Review and edit them, then save when ready.",
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -451,7 +592,11 @@ export default function Kitchen() {
           >
             <BookOpen size={19} />
             Recipe collection
-            <span>{session?.user ? data.recipes.length : "04"}</span>
+            <span>
+              {session?.user
+                ? data.recipes.filter((r) => !r.archived).length
+                : "04"}
+            </span>
           </button>
           <button
             className={view === "meals" ? "nav-item active" : "nav-item"}
@@ -476,7 +621,22 @@ export default function Kitchen() {
           </button>
         </nav>
         <div className="sidebar-section">
-          <span className="eyebrow">YOUR COLLECTIONS</span>
+          <div className="collection-section-title">
+            <span className="eyebrow">YOUR COLLECTIONS</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (requireUser()) {
+                  setModal("collections");
+                  setError("");
+                  setEditingCollectionId(null);
+                  setCollectionName("");
+                }
+              }}
+            >
+              Manage
+            </button>
+          </div>
           {collections.map((collection, index) => (
             <button
               key={collection}
@@ -494,7 +654,11 @@ export default function Kitchen() {
               />
               {collection}
               <span>
-                {recipes.filter((r) => r.collection === collection).length}
+                {
+                  recipes.filter(
+                    (r) => !r.archived && r.collection === collection,
+                  ).length
+                }
               </span>
             </button>
           ))}
@@ -587,7 +751,11 @@ export default function Kitchen() {
               </div>
               <h1>
                 {view === "recipes"
-                  ? "Your recipe collection"
+                  ? filter === "Archived"
+                    ? "Archived recipes"
+                    : !["All recipes", "Favorites"].includes(filter)
+                      ? filter
+                      : "Your recipe collection"
                   : view === "ingredients"
                     ? "The ingredient library"
                     : view === "meals"
@@ -663,19 +831,25 @@ export default function Kitchen() {
                     src={examples[0].imageUrl}
                     alt="Fresh basil pasta with roasted tomatoes"
                   />
-                  <div className="photo-label">From the Supperbook kitchen</div>
+                  <div className="photo-label">Photo from Unsplash</div>
                 </div>
               </section>
               <div className="collection-toolbar">
                 <div className="filter-tabs">
-                  {["All recipes", "Favorites"].map((tab) => (
+                  {[
+                    "All recipes",
+                    "Favorites",
+                    ...(session?.user ? ["Archived"] : []),
+                  ].map((tab) => (
                     <button
                       key={tab}
                       className={filter === tab ? "selected" : ""}
                       onClick={() => setFilter(tab)}
                     >
                       {tab}
-                      {tab === "All recipes" && <span>{recipes.length}</span>}
+                      {tab === "All recipes" && (
+                        <span>{recipes.filter((r) => !r.archived).length}</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -766,8 +940,12 @@ export default function Kitchen() {
                           <button
                             disabled={busy}
                             className={data.meals[recipe.id] ? "planned" : ""}
-                            onClick={() => plan(recipe)}
-                            aria-label={`Plan ${recipe.title}`}
+                            onClick={() =>
+                              recipe.archived
+                                ? archiveRecipe(recipe)
+                                : plan(recipe)
+                            }
+                            aria-label={`${recipe.archived ? "Restore" : "Plan"} ${recipe.title}`}
                           >
                             {data.meals[recipe.id] ? (
                               <Check size={17} />
@@ -775,7 +953,11 @@ export default function Kitchen() {
                               <Plus size={17} />
                             )}
                             <span>
-                              {data.meals[recipe.id] ? "Planned" : "Plan meal"}
+                              {recipe.archived
+                                ? "Restore"
+                                : data.meals[recipe.id]
+                                  ? "Planned"
+                                  : "Plan meal"}
                             </span>
                           </button>
                         </div>
@@ -1077,6 +1259,13 @@ export default function Kitchen() {
               alt={detail.title}
             />
             <div className="detail-copy">
+              <PhotoCredit src={detail.imageUrl} />
+              {detail.archived && (
+                <p className="archived-notice">
+                  This recipe is archived. Restore it to include it in a meal
+                  plan.
+                </p>
+              )}
               <span className="eyebrow">{detail.collection}</span>
               <h2>{detail.title}</h2>
               <p>{detail.description}</p>
@@ -1090,10 +1279,11 @@ export default function Kitchen() {
                   {detail.servings} servings
                 </span>
               </div>
+              {error && !modal && <p className="form-error" role="alert">{error}</p>}
               <div className="detail-actions">
                 <button
                   className="primary"
-                  disabled={busy}
+                  disabled={busy || !!detail.archived}
                   onClick={() => plan(detail)}
                 >
                   <Plus size={16} />
@@ -1160,12 +1350,22 @@ export default function Kitchen() {
                 )}
                 {data.recipes.some((r) => r.id === detail.id) && (
                   <button
+                    type="button"
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => archiveRecipe(detail)}
+                  >
+                    {detail.archived ? "Restore recipe" : "Archive recipe"}
+                  </button>
+                )}
+                {data.recipes.some((r) => r.id === detail.id) && (
+                  <button
                     className="danger text-button"
                     disabled={busy}
                     onClick={() => deleteRecipe(detail)}
                   >
                     <Trash2 size={14} />
-                    Remove recipe
+                    Delete recipe
                   </button>
                 )}
               </div>
@@ -1192,6 +1392,38 @@ export default function Kitchen() {
             <p className="muted">
               Keep the details that matter, from the first ingredient to your
               own notes.
+            </p>
+            <div className="original-url-import">
+              {" "}
+              <label>
+                Original recipe URL
+                <input
+                  type="url"
+                  value={draft.sourceUrl}
+                  onChange={(e) =>
+                    setDraft({ ...draft, sourceUrl: e.target.value })
+                  }
+                  placeholder="https://…"
+                />
+              </label>
+              <button
+                type="button"
+                className="outline"
+                disabled={busy || !draft.sourceUrl.trim()}
+                onClick={importOriginal}
+              >
+                {busy ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  <ArrowDownToLine size={16} />
+                )}
+                Import from original URL
+              </button>
+            </div>
+            <p className="import-explainer">
+              Paste the original link to fill this recipe. You can edit the
+              imported values before saving; your collection and cooking notes
+              are kept.
             </p>
             <label>
               Recipe name
@@ -1271,18 +1503,13 @@ export default function Kitchen() {
                   placeholder="https://…"
                 />
               </label>
-              <label>
-                Original recipe URL
-                <input
-                  type="url"
-                  value={draft.sourceUrl}
-                  onChange={(e) =>
-                    setDraft({ ...draft, sourceUrl: e.target.value })
-                  }
-                  placeholder="https://…"
-                />
-              </label>
             </div>
+
+            <p className="photo-provenance-note">
+              Photos use existing online sources. Supperbook does not generate
+              images.
+            </p>
+            <PhotoCredit src={draft.imageUrl} />
             <div className="editor-section-heading">
               <h3>Ingredients</h3>
               <span>Amounts belong to this recipe.</span>
@@ -1492,6 +1719,181 @@ export default function Kitchen() {
               </button>
             </div>
           </form>
+        </Dialog>
+      )}
+      {modal === "collections" && (
+        <Dialog
+          title="Manage collections"
+          onClose={() => {
+            setModal(null);
+            setError("");
+          }}
+        >
+          <div className="eyebrow">YOUR RECIPE SHELVES</div>
+          <h2>Make room for what you cook.</h2>
+          <p className="collection-explainer">
+            Create a collection for any kind of cooking. Renaming it updates its
+            recipes, and deleting it keeps them safely in Unfiled.
+          </p>
+          <form onSubmit={saveCollection}>
+            <label>
+              {editingCollectionId ? "Rename collection" : "New collection"}
+              <input
+                autoFocus
+                required
+                maxLength={80}
+                value={collectionName}
+                onChange={(e) => setCollectionName(e.target.value)}
+                placeholder="Sunday suppers"
+              />
+            </label>
+            <div className="collection-form-actions">
+              <button className="primary" disabled={busy}>
+                {editingCollectionId ? "Save name" : "Create collection"}
+              </button>
+              {editingCollectionId && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => {
+                    setEditingCollectionId(null);
+                    setCollectionName("");
+                  }}
+                >
+                  Cancel rename
+                </button>
+              )}
+            </div>
+          </form>
+          <div className="collection-manager-list">
+            {data.collections.length ? (
+              data.collections.map((c) => (
+                <div className="collection-manager-row" key={c.id}>
+                  <button
+                    type="button"
+                    className="collection-open"
+                    onClick={() => {
+                      setView("recipes");
+                      setFilter(c.name);
+                      setSearch("");
+                      setModal(null);
+                      setMobile(false);
+                    }}
+                  >
+                    {c.name}
+                    <small>
+                      {
+                        data.recipes.filter((r) => r.collection === c.name)
+                          .length
+                      }{" "}
+                      recipes
+                    </small>
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button"
+                    aria-label={"Rename " + c.name}
+                    onClick={() => {
+                      setEditingCollectionId(c.id);
+                      setCollectionName(c.name);
+                      setError("");
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button danger"
+                    disabled={busy}
+                    aria-label={"Delete collection " + c.name}
+                    onClick={() => {
+                      setDeleteTarget({
+                        kind: "collection",
+                        id: c.id,
+                        name: c.name,
+                      });
+                      setError("");
+                      setModal("confirmDelete");
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="starter-note">
+                Your first collection can start with a name; add recipes
+                whenever you like.
+              </p>
+            )}
+          </div>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+        </Dialog>
+      )}
+      {modal === "confirmDelete" && deleteTarget && (
+        <Dialog
+          title={
+            deleteTarget.kind === "recipe"
+              ? "Delete recipe"
+              : "Delete collection"
+          }
+          onClose={() => {
+            if (!busy) {
+              setModal(
+                deleteTarget.kind === "collection" ? "collections" : null,
+              );
+              setDeleteTarget(null);
+              setError("");
+            }
+          }}
+        >
+          <div className="eyebrow">BEFORE YOU REMOVE IT</div>
+          <h2>
+            {deleteTarget.kind === "recipe"
+              ? "Delete this recipe?"
+              : "Delete this collection?"}
+          </h2>
+          <p className="collection-explainer">
+            {deleteTarget.kind === "recipe"
+              ? "“" +
+                deleteTarget.name +
+                "” and its cooking notes will be permanently deleted. You can archive it instead if you might want it later."
+              : "“" +
+                deleteTarget.name +
+                "” will be removed. Its recipes will be kept in Unfiled, including any archived recipes."}
+          </p>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="confirm-actions">
+            <button
+              type="button"
+              className="outline"
+              disabled={busy}
+              onClick={() => {
+                setModal(
+                  deleteTarget.kind === "collection" ? "collections" : null,
+                );
+                setDeleteTarget(null);
+              }}
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              className="primary danger-button"
+              disabled={busy}
+              onClick={performDelete}
+            >
+              {busy ? "Deleting…" : "Delete " + deleteTarget.kind}
+            </button>
+          </div>
         </Dialog>
       )}
       {modal === "import" && (
@@ -1751,6 +2153,17 @@ export default function Kitchen() {
       )}
     </div>
   );
+}
+function PhotoCredit({ src }: { src: string }) {
+  const source = photoSource(src);
+  return source ? (
+    <p className="photo-credit">
+      <a href={source.href} target="_blank" rel="noreferrer">
+        Photo source · {source.publisher}
+        <ArrowRight size={12} />
+      </a>
+    </p>
+  ) : null;
 }
 function Empty({
   title,

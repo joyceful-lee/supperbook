@@ -41,3 +41,9 @@ Set `DATABASE_URL`, `NEON_AUTH_BASE_URL`, and `NEON_AUTH_COOKIE_SECRET` in Verce
 
 The sample recipe cards are authored starting points, not saved user records. Saving one creates a recipe for the signed-in user. Photography is served from Unsplash; Instrument Serif and DM Sans load from Google Fonts. Without those external assets, the app retains local fallback typography and food image placeholders.
 
+
+## Recipe management
+
+Apply db/schema.sql followed by db/002_recipe_management.sql for a fresh database. The second migration adds independent user-owned collections, collection membership references, and recipe archive status. Existing saved recipe collections are backfilled.
+
+The editor accepts an original recipe URL at the top and has an Import from original URL button. Imported values remain editable until Save recipe; personal notes, collection and identity survive re-imports. Recipes can be archived, restored from Archived, or permanently deleted after confirmation. Archiving removes the recipe from meal planning and shopping. Manage beside Your Collections opens create, read, rename and delete controls. Deleting a collection moves its recipes to Unfiled and does not delete recipes. Photo source links are shown in the editor and recipe detail.

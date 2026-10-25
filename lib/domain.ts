@@ -26,6 +26,8 @@ export type Recipe = {
   instructions: string[];
   notes: string;
   favorite: boolean;
+  archived?: boolean;
+  collectionId?: string | null;
   ingredients: Line[];
 };
 export type Meals = Record<string, number>;
@@ -106,7 +108,7 @@ export function shoppingList(
     }
   >();
   for (const recipe of recipes) {
-    if (!meals[recipe.id]) continue;
+    if (recipe.archived || !meals[recipe.id]) continue;
     for (const line of recipe.ingredients) {
       const unit = canonicalUnit(line.unit);
       const conversion = units[unit];
@@ -195,5 +197,14 @@ export function parseIngredient(text: string): Line {
 
 export function isWebUrl(value: string) {
   if (!value) return true;
-  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
 }

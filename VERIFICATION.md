@@ -45,3 +45,15 @@ Reviewed October 25, 2026 (America/Los_Angeles).
 - https://github.com/advisories/GHSA-2464-fhr4-w9xw
 - https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
 
+
+## Recipe-management update
+
+The additive migration db/002_recipe_management.sql has been applied. Collections are now independently saved, user-owned records, with case-insensitive unique names. Existing recipe collections were backfilled without removing data.
+
+Browser verification on the updated preview confirmed: sign-in, creating an empty collection, renaming it, assigning a recipe to it, renaming the populated collection and observing the recipe update, and opening its filtered view. Archiving removed the review recipe from active recipes and cleared its meal/shopping state; restoring returned it. Both deletion confirmation dialogs were reviewed and cancelled; permanent deletion was not executed during QA. Deleting a collection is implemented transactionally to keep its recipes in Unfiled.
+
+The original-URL import button was tested against the BBC Good Food easy-pancakes page. It populated title, description, yield, timing, image, ingredients, and method. The imported title remained editable, and the existing recipe identity, collection, and cooking notes were preserved. The imported draft was cancelled; a separate saved collection edit was confirmed in the database. The import control was then moved to the top of the editor for short-screen visibility.
+
+All eight domain/regression tests passed. The cloud preview build passed the test suite, TypeScript and production compilation. Local typechecking remains limited by an incomplete lucide-react dependency extraction in this workspace; the clean cloud install provides the authoritative build result.
+
+Photo provenance: starter photos are existing images served by images.unsplash.com, with visible credits and source links. Imported photos use the image URL supplied by the recipe publisher. Supperbook does not generate images and does not claim to certify arbitrary third-party images as non-AI.

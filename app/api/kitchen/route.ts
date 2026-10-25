@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { normalizeName, isWebUrl } from "@/lib/domain";
 import { importRecipe } from "@/lib/importer";
+import { collectionAction } from "@/lib/collection-actions";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const sql = neon(process.env.DATABASE_URL!);
@@ -29,7 +30,18 @@ const recipeSchema = z.object({
   sourceName: z.string().max(200),
   servings: z.number().positive().max(1000),
   minutes: z.number().int().min(0).max(10080),
-  collection: z.string().trim().min(1).max(80),
+  collection: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .transform((name) => name.replace(/\s+/g, " "))
+    .refine(
+      (name) =>
+        !["all recipes", "favorites", "archived"].includes(name.toLowerCase()),
+      "Please choose a different collection name.",
+    )
+    .transform((name) => (name.toLowerCase() === "unfiled" ? "Unfiled" : name)),
   instructions: z.array(z.string().max(6000)).max(100),
   notes: z.string().max(10000),
   favorite: z.boolean(),
@@ -40,13 +52,15 @@ async function user() {
   return data?.user?.id;
 }
 async function snapshot(id: string) {
-  const [recipes, ingredients, state] = await Promise.all([
-    sql`SELECT r.id,r.title,r.description,r.image_url AS "imageUrl",r.source_url AS "sourceUrl",r.source_name AS "sourceName",r.servings::float8,r.minutes,r.collection,r.instructions,r.notes,r.favorite,COALESCE((SELECT jsonb_agg(jsonb_build_object('ingredientId',i.id,'name',i.name,'quantity',ri.quantity::float8,'unit',ri.unit,'preparation',ri.preparation,'originalText',ri.original_text) ORDER BY ri.position) FROM recipe_ingredients ri JOIN ingredients i ON i.id=ri.ingredient_id WHERE ri.recipe_id=r.id),'[]') AS ingredients FROM recipes r WHERE r.user_id=${id} ORDER BY r.updated_at DESC`,
+  const [recipes, ingredients, state, collections] = await Promise.all([
+    sql`SELECT r.id,r.title,r.description,r.image_url AS "imageUrl",r.source_url AS "sourceUrl",r.source_name AS "sourceName",r.servings::float8,r.minutes,r.collection,r.instructions,r.notes,r.favorite,r.archived,r.collection_id AS "collectionId",COALESCE((SELECT jsonb_agg(jsonb_build_object('ingredientId',i.id,'name',i.name,'quantity',ri.quantity::float8,'unit',ri.unit,'preparation',ri.preparation,'originalText',ri.original_text) ORDER BY ri.position) FROM recipe_ingredients ri JOIN ingredients i ON i.id=ri.ingredient_id WHERE ri.recipe_id=r.id),'[]') AS ingredients FROM recipes r WHERE r.user_id=${id} ORDER BY r.updated_at DESC`,
     sql`SELECT id,name,category FROM ingredients ORDER BY name`,
     sql`SELECT meals,checked FROM kitchen_state WHERE user_id=${id}`,
+    sql`SELECT id,name FROM collections WHERE user_id=${id} ORDER BY lower(name)`,
   ]);
   return {
     recipes,
+    collections,
     ingredients,
     meals: state[0]?.meals || {},
     checked: state[0]?.checked || [],
@@ -102,6 +116,28 @@ export async function POST(request: NextRequest) {
     if (body.action === "import") {
       const url = z.string().url().max(2000).parse(body.url);
       return NextResponse.json({ draft: await importRecipe(url) });
+    }
+    if (
+      ["createCollection", "renameCollection", "deleteCollection"].includes(
+        body.action,
+      )
+    ) {
+      const error = await collectionAction(id, body);
+      return error || NextResponse.json(await snapshot(id));
+    }
+    if (body.action === "archiveRecipe") {
+      const recipeId = z.string().uuid().parse(body.id);
+      const archived = z.boolean().parse(body.archived);
+      const [result] = await sql.transaction([
+        sql`UPDATE recipes SET archived=${archived},updated_at=now() WHERE id=${recipeId} AND user_id=${id} RETURNING id`,
+        sql`UPDATE kitchen_state SET meals=meals-${recipeId}::text,checked='[]'::jsonb,updated_at=now() WHERE user_id=${id} AND ${archived}=true AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipeId} AND user_id=${id} AND archived=true)`,
+      ]);
+      if (!result.length)
+        return NextResponse.json(
+          { error: "Recipe not found." },
+          { status: 404 },
+        );
+      return NextResponse.json(await snapshot(id));
     }
     if (body.action === "ingredient") {
       const data = z
@@ -164,7 +200,8 @@ export async function POST(request: NextRequest) {
         resolved.push({ ...line, ingredientId: matches[0].id });
       }
       await sql.transaction([
-        sql`INSERT INTO recipes(id,user_id,title,description,image_url,source_url,source_name,servings,minutes,collection,instructions,notes,favorite) VALUES(${recipe.id},${id},${recipe.title},${recipe.description},${recipe.imageUrl},${recipe.sourceUrl},${recipe.sourceName},${recipe.servings},${recipe.minutes},${recipe.collection},${JSON.stringify(recipe.instructions)}::jsonb,${recipe.notes},${recipe.favorite}) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,description=EXCLUDED.description,image_url=EXCLUDED.image_url,source_url=EXCLUDED.source_url,source_name=EXCLUDED.source_name,servings=EXCLUDED.servings,minutes=EXCLUDED.minutes,collection=EXCLUDED.collection,instructions=EXCLUDED.instructions,notes=EXCLUDED.notes,favorite=EXCLUDED.favorite,updated_at=now() WHERE recipes.user_id=${id}`,
+        sql`INSERT INTO collections(user_id,name) SELECT ${id},${recipe.collection} WHERE ${recipe.collection}<>'Unfiled' ON CONFLICT DO NOTHING`,
+        sql`INSERT INTO recipes(id,user_id,title,description,image_url,source_url,source_name,servings,minutes,collection,collection_id,instructions,notes,favorite) VALUES(${recipe.id},${id},${recipe.title},${recipe.description},${recipe.imageUrl},${recipe.sourceUrl},${recipe.sourceName},${recipe.servings},${recipe.minutes},COALESCE((SELECT name FROM collections WHERE user_id=${id} AND lower(name)=lower(${recipe.collection})),${recipe.collection}),(SELECT id FROM collections WHERE user_id=${id} AND lower(name)=lower(${recipe.collection})),${JSON.stringify(recipe.instructions)}::jsonb,${recipe.notes},${recipe.favorite}) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,description=EXCLUDED.description,image_url=EXCLUDED.image_url,source_url=EXCLUDED.source_url,source_name=EXCLUDED.source_name,servings=EXCLUDED.servings,minutes=EXCLUDED.minutes,collection=EXCLUDED.collection,collection_id=EXCLUDED.collection_id,instructions=EXCLUDED.instructions,notes=EXCLUDED.notes,favorite=EXCLUDED.favorite,updated_at=now() WHERE recipes.user_id=${id}`,
         sql`DELETE FROM recipe_ingredients WHERE recipe_id=${recipe.id} AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id})`,
         sql`INSERT INTO recipe_ingredients(recipe_id,ingredient_id,quantity,unit,preparation,original_text,position) SELECT ${recipe.id},(line->>'ingredientId')::uuid,(line->>'quantity')::numeric,line->>'unit',line->>'preparation',COALESCE(line->>'originalText',''),(ordinality-1)::int FROM jsonb_array_elements(${JSON.stringify(resolved)}::jsonb) WITH ORDINALITY AS t(line,ordinality) WHERE EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id})`,
       ]);
@@ -193,7 +230,8 @@ export async function POST(request: NextRequest) {
           checked: z.array(z.string().max(200)).max(1000),
         })
         .parse(body);
-      const owned = await sql`SELECT id FROM recipes WHERE user_id=${id}`;
+      const owned =
+        await sql`SELECT id FROM recipes WHERE user_id=${id} AND archived=false`;
       const ids = new Set(owned.map((r) => r.id));
       if (Object.keys(state.meals).some((key) => !ids.has(key)))
         return NextResponse.json(
