@@ -1,2 +1,4 @@
-import Kitchen from '@/components/kitchen';
-export default function Page(){return <Kitchen/>;}
+import Kitchen from "@/components/kitchen";
+export default function Page() {
+  return <Kitchen />;
+}

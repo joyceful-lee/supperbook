@@ -1,8 +1,142 @@
-import type { Recipe } from './domain';
-const photo=(id:string)=>`https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=85`;
-export const examples:Recipe[]=[
-{id:'10000000-0000-4000-8000-000000000001',title:'Slow-roasted tomato & basil pasta',description:'A tray of tomatoes, a little patience, and the sort of sauce worth keeping bread for.',imageUrl:photo('photo-1473093295043-cdd812d0e601'),sourceUrl:'',sourceName:'The Supperbook kitchen',servings:2,minutes:45,collection:'Everyday',instructions:['Heat the oven to 200°C / 400°F. Toss the tomatoes and crushed garlic with the olive oil and a pinch of salt in a roasting dish.','Roast for 30 minutes, until the tomatoes soften and begin to caramelize.','Cook the pasta in salted water, reserving a mug of the cooking water before draining.','Toss the pasta with the roasted tomatoes, adding a splash of pasta water to bring the sauce together. Finish with torn basil and Parmesan.'],notes:'Crush a few of the tomatoes with the back of a spoon for a silkier sauce.',favorite:false,ingredients:[{name:'Cherry tomatoes',quantity:500,unit:'g',preparation:'halved'},{name:'Garlic',quantity:3,unit:'clove',preparation:'crushed'},{name:'Olive oil',quantity:2,unit:'tbsp',preparation:''},{name:'Pasta',quantity:200,unit:'g',preparation:''},{name:'Basil',quantity:null,unit:'',preparation:'a small handful, torn'},{name:'Parmesan',quantity:30,unit:'g',preparation:'finely grated'}]},
-{id:'10000000-0000-4000-8000-000000000002',title:'Lemony chickpeas with wilted greens',description:'Creamy chickpeas and a tumble of greens, brightened with lemon and finished with feta.',imageUrl:photo('photo-1512621776951-a57141f2eefd'),sourceUrl:'',sourceName:'The Supperbook kitchen',servings:2,minutes:25,collection:'Vegetable table',instructions:['Warm olive oil in a wide pan. Add sliced garlic and cumin and cook gently for a minute.','Add the drained chickpeas with a splash of water and simmer for 10 minutes.','Fold in spinach until just wilted, then add lemon juice and crumble feta over the top.'],notes:'Serve with thick toast or warm flatbread.',favorite:false,ingredients:[{name:'Chickpeas',quantity:400,unit:'g',preparation:'drained'},{name:'Spinach',quantity:150,unit:'g',preparation:''},{name:'Garlic',quantity:2,unit:'clove',preparation:'sliced'},{name:'Olive oil',quantity:1,unit:'tbsp',preparation:''},{name:'Lemon',quantity:1,unit:'',preparation:'juiced'},{name:'Feta',quantity:60,unit:'g',preparation:'crumbled'},{name:'Cumin',quantity:1,unit:'tsp',preparation:''}]},
-{id:'10000000-0000-4000-8000-000000000003',title:'Golden chicken & herby rice',description:'A generous one-pan supper with crisp edges and rice that catches every drop of flavor.',imageUrl:photo('photo-1511690743698-d9d85f2fbf38'),sourceUrl:'',sourceName:'The Supperbook kitchen',servings:4,minutes:55,collection:'Weekend cooking',instructions:['Season the chicken with salt and paprika. Sear skin-side down in olive oil until golden, then set aside.','Soften chopped onion in the same pan. Stir in rice, add 450 ml water and a pinch of salt, then lay the chicken on top.','Cover and simmer gently for 25 minutes, until the rice is tender and the chicken reaches 74°C / 165°F. Rest for 5 minutes, then scatter with dill and serve with lemon.'],notes:'Use a wide, heavy pan with a close-fitting lid.',favorite:false,ingredients:[{name:'Chicken thighs',quantity:800,unit:'g',preparation:'bone-in, skin-on'},{name:'Rice',quantity:250,unit:'g',preparation:'rinsed'},{name:'Onion',quantity:1,unit:'',preparation:'finely chopped'},{name:'Olive oil',quantity:1,unit:'tbsp',preparation:''},{name:'Paprika',quantity:2,unit:'tsp',preparation:''},{name:'Dill',quantity:null,unit:'',preparation:'a handful, chopped'},{name:'Lemon',quantity:1,unit:'',preparation:'cut into wedges'}]},
-{id:'10000000-0000-4000-8000-000000000004',title:'Crisp potatoes, yogurt & dill',description:'Craggy roast potatoes over cool yogurt, with plenty of herbs and a squeeze of lemon.',imageUrl:photo('photo-1518977676601-b53f82aba655'),sourceUrl:'',sourceName:'The Supperbook kitchen',servings:4,minutes:50,collection:'Vegetable table',instructions:['Boil potatoes in salted water for 15 minutes, then drain and let steam dry.','Gently crush them on a tray, drizzle with olive oil and roast at 220°C / 425°F for 30 minutes.','Mix yogurt with grated garlic and lemon juice. Spoon onto a plate, add the potatoes and scatter with dill.'],notes:'Let the potatoes dry well before roasting.',favorite:false,ingredients:[{name:'Potatoes',quantity:800,unit:'g',preparation:'small'},{name:'Olive oil',quantity:3,unit:'tbsp',preparation:''},{name:'Greek yogurt',quantity:200,unit:'g',preparation:''},{name:'Garlic',quantity:1,unit:'clove',preparation:'grated'},{name:'Lemon',quantity:1,unit:'',preparation:'juiced'},{name:'Dill',quantity:null,unit:'',preparation:'chopped'}]}
+import type { Recipe } from "./domain";
+const photo = (id: string) =>
+  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=85`;
+export const examples: Recipe[] = [
+  {
+    id: "10000000-0000-4000-8000-000000000001",
+    title: "Slow-roasted tomato & basil pasta",
+    description:
+      "A tray of tomatoes, a little patience, and the sort of sauce worth keeping bread for.",
+    imageUrl: photo("photo-1473093295043-cdd812d0e601"),
+    sourceUrl: "",
+    sourceName: "The Supperbook kitchen",
+    servings: 2,
+    minutes: 45,
+    collection: "Everyday",
+    instructions: [
+      "Heat the oven to 200°C / 400°F. Toss the tomatoes and crushed garlic with the olive oil and a pinch of salt in a roasting dish.",
+      "Roast for 30 minutes, until the tomatoes soften and begin to caramelize.",
+      "Cook the pasta in salted water, reserving a mug of the cooking water before draining.",
+      "Toss the pasta with the roasted tomatoes, adding a splash of pasta water to bring the sauce together. Finish with torn basil and Parmesan.",
+    ],
+    notes:
+      "Crush a few of the tomatoes with the back of a spoon for a silkier sauce.",
+    favorite: false,
+    ingredients: [
+      {
+        name: "Cherry tomatoes",
+        quantity: 500,
+        unit: "g",
+        preparation: "halved",
+      },
+      { name: "Garlic", quantity: 3, unit: "clove", preparation: "crushed" },
+      { name: "Olive oil", quantity: 2, unit: "tbsp", preparation: "" },
+      { name: "Pasta", quantity: 200, unit: "g", preparation: "" },
+      {
+        name: "Basil",
+        quantity: null,
+        unit: "",
+        preparation: "a small handful, torn",
+      },
+      {
+        name: "Parmesan",
+        quantity: 30,
+        unit: "g",
+        preparation: "finely grated",
+      },
+    ],
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000002",
+    title: "Lemony chickpeas with wilted greens",
+    description:
+      "Creamy chickpeas and a tumble of greens, brightened with lemon and finished with feta.",
+    imageUrl: photo("photo-1512621776951-a57141f2eefd"),
+    sourceUrl: "",
+    sourceName: "The Supperbook kitchen",
+    servings: 2,
+    minutes: 25,
+    collection: "Vegetable table",
+    instructions: [
+      "Warm olive oil in a wide pan. Add sliced garlic and cumin and cook gently for a minute.",
+      "Add the drained chickpeas with a splash of water and simmer for 10 minutes.",
+      "Fold in spinach until just wilted, then add lemon juice and crumble feta over the top.",
+    ],
+    notes: "Serve with thick toast or warm flatbread.",
+    favorite: false,
+    ingredients: [
+      { name: "Chickpeas", quantity: 400, unit: "g", preparation: "drained" },
+      { name: "Spinach", quantity: 150, unit: "g", preparation: "" },
+      { name: "Garlic", quantity: 2, unit: "clove", preparation: "sliced" },
+      { name: "Olive oil", quantity: 1, unit: "tbsp", preparation: "" },
+      { name: "Lemon", quantity: 1, unit: "", preparation: "juiced" },
+      { name: "Feta", quantity: 60, unit: "g", preparation: "crumbled" },
+      { name: "Cumin", quantity: 1, unit: "tsp", preparation: "" },
+    ],
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000003",
+    title: "Golden chicken & herby rice",
+    description:
+      "A generous one-pan supper with crisp edges and rice that catches every drop of flavor.",
+    imageUrl: photo("photo-1511690743698-d9d85f2fbf38"),
+    sourceUrl: "",
+    sourceName: "The Supperbook kitchen",
+    servings: 4,
+    minutes: 55,
+    collection: "Weekend cooking",
+    instructions: [
+      "Season the chicken with salt and paprika. Sear skin-side down in olive oil until golden, then set aside.",
+      "Soften chopped onion in the same pan. Stir in rice, add 450 ml water and a pinch of salt, then lay the chicken on top.",
+      "Cover and simmer gently for 25 minutes, until the rice is tender and the chicken reaches 74°C / 165°F. Rest for 5 minutes, then scatter with dill and serve with lemon.",
+    ],
+    notes: "Use a wide, heavy pan with a close-fitting lid.",
+    favorite: false,
+    ingredients: [
+      {
+        name: "Chicken thighs",
+        quantity: 800,
+        unit: "g",
+        preparation: "bone-in, skin-on",
+      },
+      { name: "Rice", quantity: 250, unit: "g", preparation: "rinsed" },
+      { name: "Onion", quantity: 1, unit: "", preparation: "finely chopped" },
+      { name: "Olive oil", quantity: 1, unit: "tbsp", preparation: "" },
+      { name: "Paprika", quantity: 2, unit: "tsp", preparation: "" },
+      {
+        name: "Dill",
+        quantity: null,
+        unit: "",
+        preparation: "a handful, chopped",
+      },
+      { name: "Lemon", quantity: 1, unit: "", preparation: "cut into wedges" },
+    ],
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000004",
+    title: "Crisp potatoes, yogurt & dill",
+    description:
+      "Craggy roast potatoes over cool yogurt, with plenty of herbs and a squeeze of lemon.",
+    imageUrl: photo("photo-1518977676601-b53f82aba655"),
+    sourceUrl: "",
+    sourceName: "The Supperbook kitchen",
+    servings: 4,
+    minutes: 50,
+    collection: "Vegetable table",
+    instructions: [
+      "Boil potatoes in salted water for 15 minutes, then drain and let steam dry.",
+      "Gently crush them on a tray, drizzle with olive oil and roast at 220°C / 425°F for 30 minutes.",
+      "Mix yogurt with grated garlic and lemon juice. Spoon onto a plate, add the potatoes and scatter with dill.",
+    ],
+    notes: "Let the potatoes dry well before roasting.",
+    favorite: false,
+    ingredients: [
+      { name: "Potatoes", quantity: 800, unit: "g", preparation: "small" },
+      { name: "Olive oil", quantity: 3, unit: "tbsp", preparation: "" },
+      { name: "Greek yogurt", quantity: 200, unit: "g", preparation: "" },
+      { name: "Garlic", quantity: 1, unit: "clove", preparation: "grated" },
+      { name: "Lemon", quantity: 1, unit: "", preparation: "juiced" },
+      { name: "Dill", quantity: null, unit: "", preparation: "chopped" },
+    ],
+  },
 ];
