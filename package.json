@@ -1,1 +1,30 @@
-{"name":"supperbook","version":"1.0.0","private":true,"scripts":{"dev":"next dev -p 3100","build":"next build","start":"next start -p 3100","test":"node --experimental-strip-types --test tests/*.test.ts","typecheck":"tsc --noEmit"},"dependencies":{"@neondatabase/auth":"latest","@neondatabase/serverless":"1.2.0","cheerio":"1.1.2","lucide-react":"1.31.0","next":"16.3.4","react":"19.2.6","react-dom":"19.2.6","undici":"^7.16.0","zod":"3.25.76"},"devDependencies":{"@types/node":"22.19.19","@types/react":"19.2.14","@types/react-dom":"19.2.3","typescript":"5.9.3"}}
+{
+  "name": "supperbook",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/auth": "0.7.0-beta",
+    "@neondatabase/serverless": "1.2.0",
+    "cheerio": "1.1.2",
+    "lucide-react": "1.31.0",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "undici": "^7.16.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}
