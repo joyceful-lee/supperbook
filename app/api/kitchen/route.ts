@@ -17,7 +17,7 @@ export async function POST(request:NextRequest){
  try{if(request.headers.get('origin')!==request.nextUrl.origin)return NextResponse.json({error:'This request came from a different website.'},{status:403});
  const id=await user();if(!id)return NextResponse.json({error:'Sign in to save changes.'},{status:401});
  if(Number(request.headers.get('content-length')||0)>200000)return NextResponse.json({error:'This recipe is too large.'},{status:413});
- const body=await request.json();
+ const text=await request.text();if(Buffer.byteLength(text,'utf8')>200000)return NextResponse.json({error:'This recipe is too large.'},{status:413});const body=JSON.parse(text);
  if(body.action==='import'){const url=z.string().url().max(2000).parse(body.url);return NextResponse.json({draft:await importRecipe(url)});}
  if(body.action==='ingredient'){
  const data=z.object({name:z.string().trim().min(1).max(120),category:z.enum(['Produce','Pantry','Dairy & eggs','Meat & fish','Frozen','Other']),allowNew:z.boolean().optional()}).parse(body);
@@ -42,7 +42,7 @@ export async function POST(request:NextRequest){
  sql`INSERT INTO recipe_ingredients(recipe_id,ingredient_id,quantity,unit,preparation,original_text,position) SELECT ${recipe.id},(line->>'ingredientId')::uuid,(line->>'quantity')::numeric,line->>'unit',line->>'preparation',COALESCE(line->>'originalText',''),(ordinality-1)::int FROM jsonb_array_elements(${JSON.stringify(resolved)}::jsonb) WITH ORDINALITY AS t(line,ordinality) WHERE EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id})`
  ]);return NextResponse.json(await snapshot(id));
  }
- if(body.action==='deleteRecipe'){const recipeId=z.string().uuid().parse(body.id);await sql`DELETE FROM recipes WHERE id=${recipeId} AND user_id=${id}`;return NextResponse.json(await snapshot(id));}
+ if(body.action==='deleteRecipe'){const recipeId=z.string().uuid().parse(body.id);await sql.transaction([sql`DELETE FROM recipes WHERE id=${recipeId} AND user_id=${id}`,sql`UPDATE kitchen_state SET meals=meals-${recipeId}::text,checked='[]'::jsonb,updated_at=now() WHERE user_id=${id}`]);return NextResponse.json(await snapshot(id));}
  if(body.action==='favorite'){const recipeId=z.string().uuid().parse(body.id);const favorite=z.boolean().parse(body.favorite);await sql`UPDATE recipes SET favorite=${favorite} WHERE id=${recipeId} AND user_id=${id}`;return NextResponse.json(await snapshot(id));}
  if(body.action==='state'){const state=z.object({meals:z.record(z.string().uuid(),z.number().positive().max(1000)).refine(v=>Object.keys(v).length<=100),checked:z.array(z.string().max(200)).max(1000)}).parse(body);const owned=await sql`SELECT id FROM recipes WHERE user_id=${id}`;const ids=new Set(owned.map(r=>r.id));if(Object.keys(state.meals).some(key=>!ids.has(key)))return NextResponse.json({error:'Choose recipes from your own collection.'},{status:400});await sql`INSERT INTO kitchen_state(user_id,meals,checked) VALUES(${id},${JSON.stringify(state.meals)}::jsonb,${JSON.stringify(state.checked)}::jsonb) ON CONFLICT(user_id) DO UPDATE SET meals=EXCLUDED.meals,checked=EXCLUDED.checked,updated_at=now()`;return NextResponse.json({ok:true});}
  return NextResponse.json({error:'Unknown kitchen action.'},{status:400});
