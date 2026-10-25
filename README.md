@@ -37,6 +37,7 @@ GitHub: https://github.com/joyceful-lee/supperbook
 
 Vercel project: `supperbook` (`prj_EGANTuvF56cZWtCsueD92KCrnBDg`) in `leejoyce21-7656`.
 
-Set `DATABASE_URL`, `NEON_AUTH_BASE_URL`, and `NEON_AUTH_COOKIE_SECRET` in Vercel. Use a random secret of at least 32 characters. Add exact deployment origins to Neon Auth trusted domains, including the eventual production/custom domain. Connect the GitHub repository to Vercel for automatic deployments. The project uses the Next.js framework preset and the `pdx1` region near its Neon database. Preview deployments should use a separate Neon branch for future schema changes.
+Set `DATABASE_URL`, `NEON_AUTH_BASE_URL`, and `NEON_AUTH_COOKIE_SECRET` in Vercel. Use a random secret of at least 32 characters. Add exact deployment origins to Neon Auth trusted domains, including the eventual production/custom domain. The GitHub repository is connected to Vercel: pushes to main deploy automatically after the test and production build checks pass. Production is available at https://supperbook.vercel.app. The project uses the Next.js framework preset and the `pdx1` region near its Neon database. Preview deployments should use a separate Neon branch for future schema changes.
 
 The sample recipe cards are authored starting points, not saved user records. Saving one creates a recipe for the signed-in user. Photography is served from Unsplash; Instrument Serif and DM Sans load from Google Fonts. Without those external assets, the app retains local fallback typography and food image placeholders.
+

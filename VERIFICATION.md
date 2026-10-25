@@ -37,10 +37,11 @@ Reviewed October 25, 2026 (America/Los_Angeles).
 - Browser automation timed out during the imported-recipe editing interaction. Saving edits to that imported draft, the ingredient conflict dialog, a complete mobile browser pass, and a full post-upgrade sign-in pass were not completed in the browser. The server build, route availability, domain tests, database records, and earlier sign-in/meal-planning behavior are independently confirmed above.
 - Local package extraction stalled both in the synced workspace and a temporary build folder. Cloud builds were used as the authoritative compilation and TypeScript checks. A reproducible package lock and npm configuration are included; local `node_modules` may require a fresh `npm ci`.
 - One test-only account (`kitchen-review-20261025@example.invalid`) remains in Neon with its own private pasta recipe and meal-plan state. No personal user's recipes were created or modified. Test credentials and scripts are ignored by Git.
-- The GitHub-to-Vercel persistent repository connection was blocked by automatic approval review because it expands Vercel's access to a private repository. It has not been retried or bypassed. User approval is needed for connecting `joyceful-lee/supperbook` to the existing Vercel `supperbook` project.
-- Production promotion and a public/custom domain have not been configured. New preview URLs must be added to Neon Auth trusted origins before testing sign-in there.
+- The user approved the persistent GitHub connection. Vercel confirms that the existing `supperbook` project is linked to `joyceful-lee/supperbook`. A Git-sourced production deployment of commit `9bcc9d702232c14eccdfe9ea792706c70093d6c0` reached READY in `pdx1` (deployment `dpl_Fr3KXdWr7g4BfrqM3hKE8V8CzNqb`). Pushes to `main` deploy automatically, using `npm ci`, five tests, TypeScript, and the Next.js production build.
+- Production is deployed at https://supperbook.vercel.app. Vercel Authentication remains enabled. New preview URLs must be added to Neon Auth trusted origins before testing sign-in there.
 
 ## Sources used for dependency corrections
 
 - https://github.com/advisories/GHSA-2464-fhr4-w9xw
 - https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+
