@@ -23,6 +23,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useRecipeExit } from "@/components/use-recipe-exit";
 import { authClient } from "@/lib/auth-client";
 import { examples } from "@/lib/examples";
 import {
@@ -145,6 +146,11 @@ export default function Kitchen() {
   const [draggedMeal, setDraggedMeal] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const stateQueue = useRef(Promise.resolve());
+  const { requestExit: requestDraftExit, cancelExit, confirmExit, confirmOpen } = useRecipeExit(!!draft, busy, () => {
+    setModal(null);
+    setDraft(null);
+    setError("");
+  });
   async function api(body: unknown) {
     const response = await fetch("/api/kitchen", {
       method: "POST",
@@ -197,14 +203,15 @@ export default function Kitchen() {
   useEffect(() => {
     function escape(e: KeyboardEvent) {
       if (e.key === "Escape" && !busy) {
-        setModal(null);
-        setDetail(null);
-        setDraft(null);
+        if (confirmOpen) cancelExit();
+        else if (modal) setModal(null);
+        else if (draft) requestDraftExit();
+        else setDetail(null);
       }
     }
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [busy]);
+  }, [busy, modal, !!draft, requestDraftExit, confirmOpen, cancelExit]);
   const preview = !session?.user || (data.recipes.length === 0 && filter === "All recipes");
   const recipes = preview ? examples : data.recipes;
   const visible = useMemo(() => {
@@ -243,6 +250,7 @@ export default function Kitchen() {
     return false;
   }
   function navigate(next: string) {
+    if (draft) { requestDraftExit(); return; }
     setView(next);
     setSearch("");
     setFilter("All recipes");
@@ -1060,9 +1068,11 @@ export default function Kitchen() {
                 <div className="shopping-layout">
                   <div>
                     {categories.map((category) => {
-                      const rows = shopping.filter(
-                        (row) => row.category === category,
-                      );
+                      const rows = shopping
+                        .filter((row) => row.category === category)
+                        .sort((a, b) =>
+                          Number(data.checked.includes(a.key)) - Number(data.checked.includes(b.key)),
+                        );
                       return rows.length ? (
                         <section className="shopping-group" key={category}>
                           <h2>
@@ -1204,11 +1214,6 @@ export default function Kitchen() {
               )}
             </>
           )}
-          <footer className="page-footer">
-            <span>supperbook.</span>
-            <p>For the meals that become part of your life.</p>
-            <span>KEEP SOMETHING GOOD</span>
-          </footer>
         </main>
       </div>
       {toast && (
@@ -1357,10 +1362,7 @@ export default function Kitchen() {
       {draft && (
         <Dialog
           title="Recipe editor"
-          onClose={() => {
-            setDraft(null);
-            setError("");
-          }}
+          onClose={requestDraftExit}
           wide
         >
           <form className="editor" onSubmit={saveDraft}>
@@ -1690,10 +1692,7 @@ export default function Kitchen() {
                 type="button"
                 className="text-button"
                 disabled={busy}
-                onClick={() => {
-                  setDraft(null);
-                  setError("");
-                }}
+                onClick={requestDraftExit}
               >
                 Cancel
               </button>
@@ -2137,6 +2136,18 @@ export default function Kitchen() {
               Check & add ingredient
             </button>
           </form>
+        </Dialog>
+      )}
+      {confirmOpen && (
+        <Dialog title="Leave this recipe?" onClose={cancelExit}>
+          <div className="exit-confirmation">
+            <h2>Leave this recipe?</h2>
+            <p>Your unsaved changes will be lost. You can keep editing and save the recipe before leaving.</p>
+            <div className="action-group">
+              <button className="outline" onClick={cancelExit}>Keep editing</button>
+              <button className="primary" onClick={confirmExit} disabled={busy}>Discard changes</button>
+            </div>
+          </div>
         </Dialog>
       )}
     </div>

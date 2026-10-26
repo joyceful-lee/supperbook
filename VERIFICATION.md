@@ -71,3 +71,11 @@ A second private recipe was saved only to the dedicated review account. Dragging
 TXT, PDF and Word downloads completed through browser download controls. The Word file was a valid OOXML ZIP with all 11 shopping rows and 3 tbsp oil. The one-page PDF was parsed and rendered with Poppler: its quantities and full checklist were present and legible. Mobile review at 390 × 844 confirmed readable meal cards, usable move controls and an export menu inside the viewport. The viewport override was reset afterward.
 
 The authored cookbook SVG favicon is served through Next.js app/icon.svg. PDF and Word generation libraries are dynamically imported only when those export formats are requested.
+
+## Exit protection and completed shopping rows — 2026-10-25
+
+Removed the shared page footer. Shopping rows now sort unchecked items ahead of checked items within each category, preserving the existing alphabetical order within each group. Browser review checked Basil and confirmed it moved below Lemon in Produce; unchecking restored its position. The test checklist was restored.
+
+The recipe editor now asks through an in-app Keep editing / Discard changes dialog when closed through Cancel, the close button, Escape, the backdrop, in-app navigation or browser Back. Nested ingredient-dialog Escape closes only that dialog. A beforeunload listener requests the browser's native warning for refresh, tab close and document navigation. Saving exits directly and removes the guard.
+
+Preview dpl_DAyo9A5hXhU5q3t3mBXUnBWY9Zxb passed the 13 regression tests, TypeScript and the production build. Browser checks exercised close, Cancel, Escape and Back. Repeated Keep editing actions preserved edited cooking notes. The temporary notes were restored to their original value before saving the review recipe. Saving closed the editor, and a subsequent reload did not show a warning. The footer is absent from the rendered page. Native beforeunload behavior is installed in source; its prompt wording and display are controlled by the browser.

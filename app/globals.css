@@ -2093,3 +2093,8 @@ h1 {
 .meal-title { min-width: 0; }
 .meal-row > label { margin-left: 0; }
 @media (max-width: 700px) { .meal-row .meal-number { display: block; } .meal-title { font-size: 21px; } }
+
+.exit-confirmation { padding: 12px 2px 4px; }
+.exit-confirmation h2 { font-family: var(--serif); font-size: 38px; font-weight: 400; margin: 0 0 16px; }
+.exit-confirmation p { line-height: 1.7; color: var(--muted); margin-bottom: 26px; }
+.exit-confirmation .action-group { justify-content: flex-end; }
