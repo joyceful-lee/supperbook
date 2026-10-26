@@ -21,6 +21,20 @@ export async function collectionAction(
   userId: string,
   body: Record<string, unknown>,
 ) {
+  if (body.action === "setRecipeCollections") {
+    const recipeId = z.string().uuid().parse(body.id);
+    const requested = z.array(nameSchema).max(30).parse(body.collections);
+    const names = [...new Map(requested.map((name) => [name.toLowerCase(), name])).values()];
+    const owned = await sql`SELECT id FROM recipes WHERE id=${recipeId} AND user_id=${userId}`;
+    if (!owned.length) return NextResponse.json({ error: "Recipe not found." }, { status: 404 });
+    await sql.transaction([
+      sql`INSERT INTO collections(user_id,name) SELECT ${userId},name FROM jsonb_array_elements_text(${JSON.stringify(names)}::jsonb) AS requested(name) ON CONFLICT DO NOTHING`,
+      sql`DELETE FROM recipe_collections WHERE recipe_id=${recipeId} AND user_id=${userId}`,
+      sql`INSERT INTO recipe_collections(recipe_id,collection_id,user_id) SELECT ${recipeId},c.id,${userId} FROM collections c WHERE c.user_id=${userId} AND lower(c.name) IN (SELECT lower(name) FROM jsonb_array_elements_text(${JSON.stringify(names)}::jsonb) AS requested(name)) AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipeId} AND user_id=${userId})`,
+      sql`UPDATE recipes SET collection=COALESCE((SELECT name FROM collections WHERE user_id=${userId} AND lower(name)=lower(${names[0] || "Unfiled"})),'Unfiled'),collection_id=(SELECT id FROM collections WHERE user_id=${userId} AND lower(name)=lower(${names[0] || "Unfiled"})),updated_at=now() WHERE id=${recipeId} AND user_id=${userId}`,
+    ]);
+    return null;
+  }
   if (body.action === "createCollection") {
     const name = nameSchema.parse(body.name);
     const added =

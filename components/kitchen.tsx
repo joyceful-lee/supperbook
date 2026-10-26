@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import CollectionDropdown from "@/components/collection-dropdown";
 import { useRecipeExit } from "@/components/use-recipe-exit";
 import { authClient } from "@/lib/auth-client";
 import { examples } from "@/lib/examples";
@@ -151,7 +152,6 @@ export default function Kitchen() {
   } | null>(null);
   const [sidebarCollectionsOpen, setSidebarCollectionsOpen] = useState(true);
   const [openIngredientCategories, setOpenIngredientCategories] = useState<string[]>([]);
-  const [newRecipeCollection, setNewRecipeCollection] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const stateQueue = useRef(Promise.resolve());
   const { requestExit: requestDraftExit, cancelExit, confirmExit, confirmOpen } = useRecipeExit(!!draft, busy, () => {
@@ -873,6 +873,22 @@ export default function Kitchen() {
                 <div className="recipe-grid">
                   {visible.map((recipe, index) => (
                     <article className="recipe-card" key={recipe.id}>
+                      <CollectionDropdown variant="tile" disabled={busy} recipeTitle={recipe.title} options={collections}
+                        value={recipeCollections(recipe)} onBeforeOpen={requireUser}
+                        onCommit={async (names) => {
+                          setBusy(true);
+                          try {
+                            const owned = data.recipes.find((record) => record.id === recipe.id);
+                            if (!owned) {
+                              await saveExample({ ...recipe, collections: names, collection: names[0] || "Unfiled" });
+                            } else {
+                              const result = await api({ action: "setRecipeCollections", id: recipe.id, collections: names });
+                              setData(result);
+                              setDetail((current) => current?.id === recipe.id ? result.recipes.find((record: Recipe) => record.id === recipe.id) : current);
+                            }
+                            setToast("Recipe collections updated.");
+                          } finally { setBusy(false); }
+                        }} />
                       <div className="card-photo">
                         <button
                           className="photo-button"
@@ -1469,27 +1485,8 @@ export default function Kitchen() {
               </label>
               <fieldset className="recipe-collections-picker">
                 <legend>Collections</legend>
-                <div className="recipe-collection-options">
-                  {[...new Set([...collections.filter((name) => name !== "Unfiled"), ...recipeCollections(draft)])].map((name) =>
-                    <label key={name}><input type="checkbox" checked={recipeCollections(draft).includes(name)} onChange={(event) => {
-                      const selected = recipeCollections(draft);
-                      const next = event.target.checked ? [...selected, name] : selected.filter((value) => value !== name);
-                      setDraft({ ...draft, collections: next, collection: next[0] || "Unfiled" });
-                    }} />{name}</label>
-                  )}
-                </div>
-                {!recipeCollections(draft).length && <p>Unfiled until you choose a collection.</p>}
-                <div className="new-recipe-collection">
-                  <input aria-label="New collection name for recipe" maxLength={80} placeholder="New collection name" value={newRecipeCollection} onChange={(event) => setNewRecipeCollection(event.target.value)} />
-                  <button type="button" className="outline" disabled={!newRecipeCollection.trim()} onClick={() => {
-                    const name = newRecipeCollection.trim().replace(/\s+/g, " ");
-                    if (["unfiled","all recipes","favorites","archived"].includes(name.toLowerCase())) { setError("Please choose a different collection name."); return; }
-                    const names = recipeCollections(draft);
-                    const existing = [...collections, ...names].find((value) => value.toLowerCase() === name.toLowerCase()) || name;
-                    if (!names.includes(existing)) setDraft({ ...draft, collections: [...names, existing], collection: names[0] || existing });
-                    setNewRecipeCollection("");
-                  }}>Add</button>
-                </div>
+                <CollectionDropdown options={collections} value={recipeCollections(draft)}
+                  onChange={(names) => setDraft({ ...draft, collections: names, collection: names[0] || "Unfiled" })} />
               </fieldset>
             </div>
             <div className="form-grid">

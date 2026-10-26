@@ -2128,3 +2128,35 @@ h1 {
 .meal-reorder .drag-handle { touch-action: none; cursor: grab; }
 .sortable-meal.sorting .drag-handle { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .sortable-meal { transition-duration: 0ms !important; } }
+
+/* Shared collection multi-select and recipe tile shortcut. */
+.recipe-card { position: relative; }
+.recipe-card:focus-within, .recipe-card:has(.collections-dropdown[data-open="true"]) { z-index: 30; }
+.collections-dropdown { position: relative; min-width: 0; font-family: var(--sans); font-size: 12px; }
+.collections-dropdown-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 41px; padding: 10px 12px; border: 1px solid #cdd1c3; border-radius: 4px; background: var(--paper); text-align: left; }
+.collections-dropdown-trigger > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collections-dropdown-trigger > svg { flex-shrink: 0; }
+.collections-dropdown-panel { position: absolute; top: calc(100% + 7px); right: 0; width: max(100%, 285px); max-width: calc(100vw - 64px); z-index: 45; padding: 12px; background: var(--paper); border: 1px solid #cdd1c3; border-radius: 6px; box-shadow: 0 15px 40px #28312226; }
+.collections-dropdown-panel input[type="text"], .collections-dropdown-panel input:not([type]) { width: 100%; min-width: 0; margin: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 3px; background: transparent; font-size: 12px; }
+.collections-dropdown-options { max-height: 185px; overflow-y: auto; overscroll-behavior: contain; margin: 9px 0; }
+.collections-dropdown-options label, .editor .collections-dropdown-options label { display: flex; flex-direction: row; align-items: center; gap: 9px; padding: 9px 5px; margin: 0; font-size: 12px; line-height: 1.4; cursor: pointer; color: var(--ink); }
+.collections-dropdown-options label:hover { background: #e9ecdf; border-radius: 3px; }
+.collections-dropdown-options input[type="checkbox"], .editor .collections-dropdown-options input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; padding: 0; margin: 0; accent-color: var(--green); }
+.collections-dropdown-options p { padding: 12px 4px; font-size: 12px; color: var(--muted); }
+.collections-dropdown-new { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.collections-dropdown-new > input { flex: 1; }
+.collections-dropdown-new > button { flex: 0 0 32px; border: 1px solid var(--line); }
+.collections-dropdown-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; }
+.collections-dropdown-footer > span { font-size: 11px; color: var(--muted); }
+.collections-dropdown-footer .primary { min-height: 34px; padding: 8px 12px; font-size: 11px; }
+.collections-dropdown-error { color: #9a4234; font-size: 12px; margin-top: 10px; line-height: 1.5; }
+.collections-dropdown-tile { position: absolute; top: 12px; left: 12px; z-index: 8; }
+.collections-dropdown-tile > .collections-dropdown-trigger { width: auto; min-height: 32px; padding: 8px 10px; border: 0; background: #faf9f0f5; color: var(--green); font-size: 11px; box-shadow: 0 2px 8px #25311e18; opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .16s ease, transform .16s ease; }
+.recipe-card:hover .collections-dropdown-tile > .collections-dropdown-trigger,
+.recipe-card:focus-within .collections-dropdown-tile > .collections-dropdown-trigger,
+.collections-dropdown-tile[data-open="true"] > .collections-dropdown-trigger { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.collections-dropdown-tile > .collections-dropdown-panel { left: 0; right: auto; width: 285px; }
+@media (hover: none), (pointer: coarse) {
+  .collections-dropdown-tile > .collections-dropdown-trigger { opacity: 1; pointer-events: auto; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .collections-dropdown-tile > .collections-dropdown-trigger { transition: none; } }

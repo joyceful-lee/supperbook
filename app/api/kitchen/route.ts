@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ draft: await importRecipe(url) });
     }
     if (
-      ["createCollection", "renameCollection", "deleteCollection"].includes(
+      ["createCollection", "renameCollection", "deleteCollection", "setRecipeCollections"].includes(
         body.action,
       )
     ) {
