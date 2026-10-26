@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizeName,
+  capitalizeIngredient,
+  mealOrder,
   isWebUrl,
   parseIngredient,
   shoppingList,
@@ -60,7 +62,7 @@ test("shopping list scales servings, merges compatible units and keeps incompati
   );
   assert.equal(rows.length, 3);
   assert.equal(rows.find((r) => r.unit === "g")?.quantity, 700);
-  assert.equal(rows.find((r) => r.unit === "ml")?.quantity, 236.588);
+  assert.equal(rows.find((r) => r.unit === "cup")?.quantity, 1);
   assert.equal(rows.find((r) => r.quantity === null)?.name, "Rice");
 });
 test("import network guard rejects local, private, link-local and mapped private addresses", () => {
@@ -86,4 +88,24 @@ test("recipe links reject malformed and executable URLs", () => {
  assert.equal(isWebUrl("https://example.com/recipe"), true);
  assert.equal(isWebUrl(""), true);
  for (const url of ["http://", "javascript:alert(1)", "https://user:pass@example.com"]) assert.equal(isWebUrl(url), false);
+});
+
+test("ingredient capitalization preserves the rest of a name", () => {
+  assert.equal(capitalizeIngredient("  olive oil "), "Olive oil");
+  assert.equal(capitalizeIngredient("crème fraîche"), "Crème fraîche");
+  assert.equal(capitalizeIngredient("extra Virgin oil"), "Extra Virgin oil");
+});
+test("meal order retains chosen order and filters removed meals", () => {
+  assert.deepEqual(mealOrder({ a: 2, b: 4, c: 1 }, ["b", "missing", "b", "a"]), ["b", "a", "c"]);
+});
+test("shopping combines spoon measures without turning them into milliliters", () => {
+  const base: Recipe = { id: "oil", title: "Oil", servings: 1, minutes: 1, description: "", collection: "", sourceUrl: "", sourceName: "", imageUrl: "", favorite: false, notes: "", instructions: [], ingredients: [] };
+  const rows = shoppingList([{ ...base, ingredients: [
+    { name: "Oil", quantity: 1, unit: "tbsp", preparation: "" },
+    { name: "Oil", quantity: 3, unit: "tsp", preparation: "" },
+    { name: "Eggs", quantity: 2, unit: "", preparation: "" },
+  ] }], { oil: 1 }, []);
+  assert.equal(rows.find((r) => r.name === "Oil")?.unit, "tbsp");
+  assert.ok(Math.abs(rows.find((r) => r.name === "Oil")!.quantity! - 2) < .001);
+  assert.equal(rows.find((r) => r.name === "Eggs")?.unit, "");
 });

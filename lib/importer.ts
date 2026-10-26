@@ -125,16 +125,33 @@ export async function importRecipe(input: string) {
           }
         };
         instructions(recipe.recipeInstructions);
-        let image = recipe.image;
-        if (Array.isArray(image)) image = image[0];
-        if (image && typeof image === "object")
-          image = (image as Record<string, unknown>).url;
+        const imageOptions: string[] = [];
+        const addImage = (value: unknown) => {
+          if (Array.isArray(value)) { value.forEach(addImage); return; }
+          if (value && typeof value === "object") {
+            const image = value as Record<string, unknown>;
+            addImage(image.url || image.contentUrl); return;
+          }
+          if (typeof value !== "string") return;
+          let image = "";
+          try { image = safeImage(new URL(value, url).href); } catch {}
+          if (image && !imageOptions.includes(image)) imageOptions.push(image);
+        };
+        addImage(recipe.image);
+        $('meta[property="og:image"],meta[name="twitter:image"]').each((_, el) => addImage($(el).attr("content")));
+        $('article img,main img').each((_, el) => {
+          const img = $(el);
+          const width = Number(img.attr("width") || 0);
+          const height = Number(img.attr("height") || 0);
+          if (width >= 500 && height >= 250) addImage(img.attr("data-src") || img.attr("src"));
+        });
         const yieldText = String(recipe.recipeYield || "2");
         const servings = Number(yieldText.match(/\d+(?:\.\d+)?/)?.[0] || 2);
         return {
           title: text(recipe.name) || "Imported recipe",
           description: text(recipe.description),
-          imageUrl: safeImage(image),
+          imageUrl: imageOptions[0] || "",
+          imageOptions: imageOptions.slice(0, 3),
           sourceUrl: url.href,
           sourceName: url.hostname.replace(/^www\./, ""),
           servings: Math.min(1000, Math.max(1, servings)),

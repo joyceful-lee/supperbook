@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Supperbook — Your kitchen, collected",
+  title: "Supperbook",
   description:
     "Keep the recipes you come back to, plan a few good meals, and take a thoughtful list to the shops.",
 };

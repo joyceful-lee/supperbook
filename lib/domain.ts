@@ -18,6 +18,7 @@ export type Recipe = {
   title: string;
   description: string;
   imageUrl: string;
+  imageOptions?: string[];
   sourceUrl: string;
   sourceName: string;
   servings: number;
@@ -31,6 +32,12 @@ export type Recipe = {
   ingredients: Line[];
 };
 export type Meals = Record<string, number>;
+export function capitalizeIngredient(value: string) {
+  return value.trim().replace(/\p{L}/u, (letter) => letter.toLocaleUpperCase());
+}
+export function mealOrder(meals: Meals, order: string[] = []) {
+  return [...new Set([...order, ...Object.keys(meals)])].filter((id) => meals[id] > 0);
+}
 export function normalizeName(value: string) {
   return value
     .toLowerCase()
@@ -138,11 +145,19 @@ export function shoppingList(
             ingredients.find((i) => i.id === line.ingredientId)?.category ||
             "Other",
           quantity,
-          unit: conversion?.unit || unit,
+          unit,
           recipes: [recipe.title],
           preparations: line.preparation ? [line.preparation] : [],
         });
       }
+    }
+  }
+  for (const row of rows.values()) {
+    const conversion = units[row.unit];
+    if (conversion && row.quantity !== null) {
+      row.quantity /= conversion.factor;
+      if (row.unit === "ml" && row.quantity >= 1000) { row.quantity /= 1000; row.unit = "l"; }
+      if (row.unit === "g" && row.quantity >= 1000) { row.quantity /= 1000; row.unit = "kg"; }
     }
   }
   return [...rows.values()].sort(

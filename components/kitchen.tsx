@@ -33,6 +33,7 @@ import {
 } from "@/lib/recipe-management";
 import {
   amount,
+  mealOrder,
   normalizeName,
   shoppingList,
   type Ingredient,
@@ -40,11 +41,13 @@ import {
   type Meals,
   type Recipe,
 } from "@/lib/domain";
+import { exportShoppingList, shoppingText, planText } from "@/lib/list-export";
 type Snapshot = {
   collections: Collection[];
   recipes: Recipe[];
   ingredients: Ingredient[];
   meals: Meals;
+  mealOrder: string[];
   checked: string[];
 };
 type Modal =
@@ -109,6 +112,7 @@ export default function Kitchen() {
     recipes: [],
     ingredients: [],
     meals: {},
+    mealOrder: [],
     checked: [],
   });
   const [loading, setLoading] = useState(false),
@@ -138,6 +142,8 @@ export default function Kitchen() {
     id: string;
     name: string;
   } | null>(null);
+  const [draggedMeal, setDraggedMeal] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const stateQueue = useRef(Promise.resolve());
   async function api(body: unknown) {
     const response = await fetch("/api/kitchen", {
@@ -160,6 +166,7 @@ export default function Kitchen() {
         collections: [],
         ingredients: [],
         meals: {},
+    mealOrder: [],
         checked: [],
       });
       return;
@@ -227,7 +234,7 @@ export default function Kitchen() {
           : []),
       ]
     : [...new Set(examples.map((r) => r.collection))];
-  const selected = data.recipes.filter((r) => !r.archived && data.meals[r.id]);
+  const selected = mealOrder(data.meals, data.mealOrder).map((id) => data.recipes.find((r) => r.id === id && !r.archived)).filter((r): r is Recipe => !!r);
   function requireUser() {
     if (session?.user) return true;
     setAuthMode("signin");
@@ -242,11 +249,12 @@ export default function Kitchen() {
     setMobile(false);
     setError("");
   }
-  function persistState(meals: Meals, checked: string[]) {
-    setData((d) => ({ ...d, meals, checked }));
+  function persistState(meals: Meals, checked: string[], order = data.mealOrder) {
+    const ordered = mealOrder(meals, order);
+    setData((d) => ({ ...d, meals, checked, mealOrder: ordered }));
     stateQueue.current = stateQueue.current
       .catch(() => {})
-      .then(() => api({ action: "state", meals, checked }))
+      .then(() => api({ action: "state", meals, checked, mealOrder: ordered }))
       .then(() => {})
       .catch((e) =>
         setError(
@@ -282,8 +290,9 @@ export default function Kitchen() {
       const owned = data.recipes.some((x) => x.id === r.id)
         ? data.recipes
         : [r, ...data.recipes];
-      await api({ action: "state", meals, checked: [] });
-      setData((d) => ({ ...d, recipes: owned, meals, checked: [] }));
+      const order = mealOrder(meals, data.mealOrder);
+      await api({ action: "state", meals, checked: [], mealOrder: order });
+      setData((d) => ({ ...d, recipes: owned, meals, checked: [], mealOrder: order }));
       setToast("Added to your meal plan. Your shopping list is ready.");
     } catch (e) {
       setError((e as Error).message);
@@ -541,24 +550,29 @@ export default function Kitchen() {
       setBusy(false);
     }
   }
-  function downloadList() {
-    const text = categories
-      .map((category) => {
-        const rows = shopping.filter((r) => r.category === category);
-        return rows.length
-          ? `${category}\n${rows.map((r) => `${data.checked.includes(r.key) ? "[x]" : "[ ]"} ${r.name} — ${amount(r.quantity, r.unit)}${r.preparations.length ? " (" + r.preparations.join("; ") + ")" : ""}`).join("\n")}`
-          : "";
-      })
-      .filter(Boolean)
-      .join("\n\n");
-    const objectUrl = URL.createObjectURL(
-      new Blob([`Supperbook shopping list\n\n${text}`], { type: "text/plain" }),
-    );
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = "supperbook-shopping-list.txt";
-    a.click();
-    URL.revokeObjectURL(objectUrl);
+  function moveMeal(id: string, target: string) {
+    const order = selected.map((r) => r.id);
+    const from = order.indexOf(id), to = order.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return;
+    order.splice(from, 1); order.splice(to, 0, id);
+    persistState(data.meals, data.checked, order);
+  }
+  async function share(kind: "meals" | "shopping") {
+    const text = kind === "meals" ? planText(selected, data.meals) : shoppingText(shopping, data.checked);
+    const title = kind === "meals" ? "Meal plan" : "Shopping list";
+    try {
+      if (navigator.share) await navigator.share({ title, text });
+      else { await navigator.clipboard.writeText(text); setToast(title + " copied, ready to share."); }
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setError("Sharing was unavailable. Please use Copy text instead.");
+    }
+  }
+  async function downloadList(format: "txt" | "docx" | "pdf" | "copy") {
+    setExportOpen(false);
+    try {
+      await exportShoppingList(format, shoppingText(shopping, data.checked));
+      if (format === "copy") setToast("Shopping list copied.");
+    } catch { setError("The list could not be exported. Please try again."); }
   }
   const updateLine = (index: number, patch: Partial<Line>) =>
     setDraft((d) =>
@@ -663,17 +677,6 @@ export default function Kitchen() {
             </button>
           ))}
         </div>
-        <div className="sidebar-note">
-          <span className="little-sprig">
-            <Leaf size={25} strokeWidth={1} />
-          </span>
-          <p>
-            Good meals often begin
-            <br />
-            with a recipe you kept.
-          </p>
-          <span className="note-rule" />
-        </div>
         <div className="account">
           {session?.user ? (
             <>
@@ -715,13 +718,9 @@ export default function Kitchen() {
             >
               <Menu />
             </button>
-            <span>Your kitchen, collected</span>
+
           </div>
           <div className="topbar-right">
-            <span className="season">
-              <i />
-              The autumn kitchen
-            </span>
             <button
               className="text-button"
               onClick={() => {
@@ -763,15 +762,8 @@ export default function Kitchen() {
                       : "Your shopping list"}
                 {view !== "meals" && <span className="heading-dot">.</span>}
               </h1>
-              <p>
-                {view === "recipes"
-                  ? "The dishes you love, and the ones you’ll come back to."
-                  : view === "ingredients"
-                    ? "A shared cupboard of ingredients, ready for your next recipe."
-                    : view === "meals"
-                      ? "Choose a few good meals and let the shopping take care of itself."
-                      : "Everything for your selected meals, gathered into one list."}
-              </p>
+              {view === "ingredients" && <p>A shared cupboard of ingredients, ready for your next recipe.</p>}
+              {view === "shopping" && <p>Everything for your selected meals, gathered into one list.</p>}
             </div>
             <button
               className="primary"
@@ -802,38 +794,6 @@ export default function Kitchen() {
           )}
           {view === "recipes" && (
             <>
-              <section className="feature">
-                <div className="feature-copy">
-                  <div className="eyebrow">
-                    <span className="thin-line" />
-                    SOMETHING GOOD FOR TONIGHT
-                  </div>
-                  <h2>
-                    There’s always time
-                    <br />
-                    <em>for a very good pasta.</em>
-                  </h2>
-                  <p>
-                    Sweet roasted tomatoes, torn basil, and a little of
-                    whatever’s left in the Parmesan wedge.
-                  </p>
-                  <button onClick={() => setDetail(examples[0])}>
-                    Open the recipe
-                    <ArrowRight size={19} />
-                  </button>
-                  <span className="feature-foot">
-                    <Clock3 size={14} />
-                    45 minutes<span>·</span>Serves two
-                  </span>
-                </div>
-                <div className="feature-photo">
-                  <FoodImage
-                    src={examples[0].imageUrl}
-                    alt="Fresh basil pasta with roasted tomatoes"
-                  />
-                  <div className="photo-label">Photo from Unsplash</div>
-                </div>
-              </section>
               <div className="collection-toolbar">
                 <div className="filter-tabs">
                   {[
@@ -991,19 +951,30 @@ export default function Kitchen() {
                     : "Your plan can be as simple as a couple of suppers. Add recipes from your collection to begin."}
                 </p>
                 {selected.length > 0 && (
-                  <button
-                    className="outline"
-                    onClick={() => navigate("shopping")}
-                  >
-                    View shopping list
-                    <ArrowRight size={17} />
-                  </button>
+                  <div className="action-group">
+                    <button className="outline" onClick={() => share("meals")}>Share meal plan</button>
+                    <button className="outline" onClick={async () => {
+                      try { await navigator.clipboard.writeText(planText(selected, data.meals)); setToast("Meal plan copied."); }
+                      catch { setError("Clipboard access was unavailable."); }
+                    }}>Copy plan</button>
+                    <button className="outline" onClick={() => navigate("shopping")}>View shopping list <ArrowRight size={17} /></button>
+                  </div>
                 )}
               </div>
               {selected.length ? (
                 <div className="meal-list">
                   {selected.map((recipe, index) => (
-                    <article className="meal-row" key={recipe.id}>
+                    <article className={`meal-row ${draggedMeal === recipe.id ? "dragging" : ""}`} key={recipe.id}
+                      onDragOver={(event) => { if (draggedMeal) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+                      onDrop={(event) => { event.preventDefault(); if (draggedMeal) moveMeal(draggedMeal, recipe.id); setDraggedMeal(null); }}>
+                      <div className="meal-reorder">
+                        <button type="button" className="drag-handle" draggable
+                          aria-label={`Drag ${recipe.title} to reorder`}
+                          onDragStart={(event) => { setDraggedMeal(recipe.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", recipe.id); }}
+                          onDragEnd={() => setDraggedMeal(null)}>⋮⋮</button>
+                        <button type="button" disabled={index === 0} aria-label={`Move ${recipe.title} up`} onClick={() => moveMeal(recipe.id, selected[index - 1].id)}>↑</button>
+                        <button type="button" disabled={index === selected.length - 1} aria-label={`Move ${recipe.title} down`} onClick={() => moveMeal(recipe.id, selected[index + 1].id)}>↓</button>
+                      </div>
                       <span className="meal-number">
                         {String(index + 1).padStart(2, "0")}
                       </span>
@@ -1069,10 +1040,20 @@ export default function Kitchen() {
                     : "Your shopping list will appear as you choose meals."}
                 </p>
                 {shopping.length > 0 && (
-                  <button className="outline" onClick={downloadList}>
-                    <ArrowDownToLine size={17} />
-                    Download list
-                  </button>
+                  <div className="action-group">
+                    <button className="outline" onClick={() => share("shopping")}>Share shopping list</button>
+                    <div className="export-control">
+                      <button className="outline" aria-expanded={exportOpen} aria-controls="list-export-options" onClick={() => setExportOpen(!exportOpen)}>
+                        <ArrowDownToLine size={17} /> Download list <ChevronDown size={14} />
+                      </button>
+                      {exportOpen && <div id="list-export-options" className="export-options">
+                        <button onClick={() => downloadList("txt")}>Text (.txt)</button>
+                        <button onClick={() => downloadList("docx")}>Word (.docx)</button>
+                        <button onClick={() => downloadList("pdf")}>PDF (.pdf)</button>
+                        <button onClick={() => downloadList("copy")}>Copy text</button>
+                      </div>}
+                    </div>
+                  </div>
                 )}
               </div>
               {shopping.length ? (
@@ -1505,10 +1486,17 @@ export default function Kitchen() {
               </label>
             </div>
 
-            <p className="photo-provenance-note">
-              Photos use existing online sources. Supperbook does not generate
-              images.
-            </p>
+            {!!draft.imageOptions?.length && <fieldset className="header-image-picker">
+              <legend>Choose a header photo</legend>
+              <div className="header-image-options">
+                {draft.imageOptions.map((image, index) => <label key={image} className={draft.imageUrl === image ? "chosen" : ""}>
+                  <input type="radio" name="header-photo" value={image} checked={draft.imageUrl === image} onChange={() => setDraft({ ...draft, imageUrl: image })} />
+                  <FoodImage src={image} alt={`Header photo option ${index + 1}`} />
+                  <span>Photo {index + 1}{draft.imageUrl === image ? " · Selected" : ""}</span>
+                </label>)}
+              </div>
+              {draft.imageOptions.length < 2 && <p>This source provided one usable photo. You can also enter a photo URL above.</p>}
+            </fieldset>}
             <PhotoCredit src={draft.imageUrl} />
             <div className="editor-section-heading">
               <h3>Ingredients</h3>

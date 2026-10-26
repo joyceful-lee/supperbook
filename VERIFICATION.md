@@ -57,3 +57,17 @@ The original-URL import button was tested against the BBC Good Food easy-pancake
 All eight domain/regression tests passed. The cloud preview build passed the test suite, TypeScript and production compilation. Local typechecking remains limited by an incomplete lucide-react dependency extraction in this workspace; the clean cloud install provides the authoritative build result.
 
 Photo provenance: starter photos are existing images served by images.unsplash.com, with visible credits and source links. Imported photos use the image URL supplied by the recipe publisher. Supperbook does not generate images and does not claim to certify arbitrary third-party images as non-AI.
+
+## Collection, planning and export update — 2026-10-25
+
+Migration db/003_meal_order_ingredient_names.sql was applied to Neon. Six existing library names were capitalized; a subsequent audit found zero remaining mismatches. The browser added lowercase milk as Milk, preserving the library duplicate/similarity check.
+
+Preview dpl_9JK9s47WQim3zLh55yN6wcXXXsYb passed all 13 tests, TypeScript and the clean production build. Added tests cover casing, custom meal order, compatible spoon units, and shared/exported list and plan contents. Local typechecking is still limited by incomplete parent-workspace TypeScript packages; the cloud build is authoritative.
+
+Browser checks confirmed the requested collection hero and copy were removed. Importing the BBC Good Food pancake recipe offered three publisher image variants. Selecting the third changed the photo URL; saving the editable draft persisted that URL in the recipe detail. The import screen no longer includes the removed photo-generation statement.
+
+A second private recipe was saved only to the dedicated review account. Dragging the first meal below the second reordered the plan; accessible move buttons also worked. The order survived reload. Shopping retained grams, tablespoons, whole egg counts and the recipe's milliliters for milk. Copy plan and Copy text displayed success feedback. Native sharing opens the device's sharing flow; no recipient was chosen and no messages were sent during QA.
+
+TXT, PDF and Word downloads completed through browser download controls. The Word file was a valid OOXML ZIP with all 11 shopping rows and 3 tbsp oil. The one-page PDF was parsed and rendered with Poppler: its quantities and full checklist were present and legible. Mobile review at 390 × 844 confirmed readable meal cards, usable move controls and an export menu inside the viewport. The viewport override was reset afterward.
+
+The authored cookbook SVG favicon is served through Next.js app/icon.svg. PDF and Word generation libraries are dynamically imported only when those export formats are requested.

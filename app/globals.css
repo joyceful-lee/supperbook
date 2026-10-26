@@ -2050,3 +2050,46 @@ h1 {
     width: 100%;
   }
 }
+
+/* Plan controls and export choices */
+.account { margin-top: auto; }
+.action-group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.export-control { position: relative; }
+.export-options { position: absolute; z-index: 12; top: calc(100% + 8px); right: 0; min-width: 190px; padding: 7px; background: var(--paper, #fffdf8); border: 1px solid #d9d6ca; box-shadow: 0 10px 30px #252a1d15; border-radius: 8px; }
+.export-options button { display: block; width: 100%; padding: 11px 14px; text-align: left; background: transparent; border: 0; border-radius: 4px; }
+.export-options button:hover, .export-options button:focus-visible { background: #eeeee4; }
+.meal-row { grid-template-columns: 36px 36px 100px minmax(0, 1fr) 90px 30px; }
+.meal-row.dragging { opacity: .55; }
+.meal-reorder { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.meal-reorder button { border: 0; background: transparent; color: #58634d; min-width: 28px; min-height: 24px; border-radius: 4px; }
+.meal-reorder button:hover { background: #e7e9df; }
+.meal-reorder button:disabled { opacity: .25; }
+.meal-reorder .drag-handle { cursor: grab; font-size: 23px; letter-spacing: -5px; padding-right: 8px; }
+.header-image-picker { padding: 0; margin: 22px 0; border: 0; }
+.header-image-picker legend { font-size: 14px; margin-bottom: 12px; font-weight: 600; }
+.header-image-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.header-image-options label { display: block; border: 2px solid transparent; padding: 5px; border-radius: 6px; cursor: pointer; position: relative; background: #efeee6; }
+.header-image-options label.chosen { border-color: #4b5c3f; }
+.header-image-options input { position: absolute; width: 18px; height: 18px; margin: 8px; accent-color: #4b5c3f; }
+.header-image-options img, .header-image-options .food-placeholder { width: 100%; height: 120px; object-fit: cover; border-radius: 3px; }
+.header-image-options span { display: block; padding: 8px 3px 3px; font-size: 12px; }
+.header-image-picker p { font-size: 12px; color: #6f7467; margin-top: 10px; }
+@media (max-width: 1100px) { .meal-row { grid-template-columns: 30px 26px 75px minmax(0,1fr) 75px 28px; gap: 12px; } }
+@media (max-width: 700px) {
+  .meal-row { grid-template-columns: 28px 28px 65px minmax(0,1fr) 28px; gap: 8px; }
+  .meal-row .meal-reorder { grid-column: 1; grid-row: 1 / span 2; }
+  .meal-row .meal-number { grid-column: 2; grid-row: 1; }
+  .meal-row > img, .meal-row > .food-placeholder { grid-column: 3; grid-row: 1; width: 65px; height: 65px; }
+  .meal-row .meal-title { grid-column: 4; grid-row: 1; }
+  .meal-row > label { grid-column: 3 / 5; grid-row: 2; }
+  .meal-row > .icon-button { grid-column: 5; grid-row: 1; }
+  .action-group { width: 100%; }
+  .header-image-options { gap: 6px; }
+  .header-image-options img, .header-image-options .food-placeholder { height: 90px; }
+}
+
+.meal-row { display: grid; }
+.meal-row > img, .meal-row > .food-placeholder { width: 100%; max-width: 100px; }
+.meal-title { min-width: 0; }
+.meal-row > label { margin-left: 0; }
+@media (max-width: 700px) { .meal-row .meal-number { display: block; } .meal-title { font-size: 21px; } }

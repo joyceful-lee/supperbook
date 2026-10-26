@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { normalizeName, isWebUrl } from "@/lib/domain";
+import { normalizeName, isWebUrl, capitalizeIngredient, mealOrder } from "@/lib/domain";
 import { importRecipe } from "@/lib/importer";
 import { collectionAction } from "@/lib/collection-actions";
 export const runtime = "nodejs";
@@ -55,7 +55,7 @@ async function snapshot(id: string) {
   const [recipes, ingredients, state, collections] = await Promise.all([
     sql`SELECT r.id,r.title,r.description,r.image_url AS "imageUrl",r.source_url AS "sourceUrl",r.source_name AS "sourceName",r.servings::float8,r.minutes,r.collection,r.instructions,r.notes,r.favorite,r.archived,r.collection_id AS "collectionId",COALESCE((SELECT jsonb_agg(jsonb_build_object('ingredientId',i.id,'name',i.name,'quantity',ri.quantity::float8,'unit',ri.unit,'preparation',ri.preparation,'originalText',ri.original_text) ORDER BY ri.position) FROM recipe_ingredients ri JOIN ingredients i ON i.id=ri.ingredient_id WHERE ri.recipe_id=r.id),'[]') AS ingredients FROM recipes r WHERE r.user_id=${id} ORDER BY r.updated_at DESC`,
     sql`SELECT id,name,category FROM ingredients ORDER BY name`,
-    sql`SELECT meals,checked FROM kitchen_state WHERE user_id=${id}`,
+    sql`SELECT meals,checked,meal_order FROM kitchen_state WHERE user_id=${id}`,
     sql`SELECT id,name FROM collections WHERE user_id=${id} ORDER BY lower(name)`,
   ]);
   return {
@@ -64,6 +64,7 @@ async function snapshot(id: string) {
     ingredients,
     meals: state[0]?.meals || {},
     checked: state[0]?.checked || [],
+    mealOrder: mealOrder(state[0]?.meals || {}, state[0]?.meal_order || []),
   };
 }
 export async function GET() {
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
           { status: 409 },
         );
       const added =
-        await sql`INSERT INTO ingredients(name,normalized_name,category,created_by) VALUES(${data.name},${normalized},${data.category},${id}) ON CONFLICT(normalized_name) DO UPDATE SET normalized_name=EXCLUDED.normalized_name RETURNING id,name,category`;
+        await sql`INSERT INTO ingredients(name,normalized_name,category,created_by) VALUES(${capitalizeIngredient(data.name)},${normalized},${data.category},${id}) ON CONFLICT(normalized_name) DO UPDATE SET normalized_name=EXCLUDED.normalized_name RETURNING id,name,category`;
       return NextResponse.json({ ingredient: added[0] });
     }
     if (body.action === "saveRecipe") {
@@ -228,6 +229,7 @@ export async function POST(request: NextRequest) {
             .record(z.string().uuid(), z.number().positive().max(1000))
             .refine((v) => Object.keys(v).length <= 100),
           checked: z.array(z.string().max(200)).max(1000),
+          mealOrder: z.array(z.string().uuid()).max(100).optional(),
         })
         .parse(body);
       const owned =
@@ -238,7 +240,7 @@ export async function POST(request: NextRequest) {
           { error: "Choose recipes from your own collection." },
           { status: 400 },
         );
-      await sql`INSERT INTO kitchen_state(user_id,meals,checked) VALUES(${id},${JSON.stringify(state.meals)}::jsonb,${JSON.stringify(state.checked)}::jsonb) ON CONFLICT(user_id) DO UPDATE SET meals=EXCLUDED.meals,checked=EXCLUDED.checked,updated_at=now()`;
+      await sql`INSERT INTO kitchen_state(user_id,meals,checked,meal_order) VALUES(${id},${JSON.stringify(state.meals)}::jsonb,${JSON.stringify(state.checked)}::jsonb,${JSON.stringify(mealOrder(state.meals,state.mealOrder))}::jsonb) ON CONFLICT(user_id) DO UPDATE SET meals=EXCLUDED.meals,checked=EXCLUDED.checked,meal_order=EXCLUDED.meal_order,updated_at=now()`;
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json(
