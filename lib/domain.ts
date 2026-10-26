@@ -24,6 +24,7 @@ export type Recipe = {
   servings: number;
   minutes: number;
   collection: string;
+  collections?: string[];
   instructions: string[];
   notes: string;
   favorite: boolean;

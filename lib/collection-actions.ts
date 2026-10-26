@@ -57,8 +57,8 @@ export async function collectionAction(
   }
   if (body.action === "deleteCollection") {
     await sql.transaction([
-      sql`UPDATE recipes SET collection='Unfiled',collection_id=NULL,updated_at=now() WHERE user_id=${userId} AND (collection_id=${id} OR (collection_id IS NULL AND collection=${owned[0].name}))`,
       sql`DELETE FROM collections WHERE id=${id} AND user_id=${userId}`,
+      sql`UPDATE recipes r SET collection=COALESCE((SELECT c.name FROM recipe_collections rc JOIN collections c ON c.id=rc.collection_id AND c.user_id=r.user_id WHERE rc.recipe_id=r.id AND rc.user_id=r.user_id ORDER BY lower(c.name) LIMIT 1),'Unfiled'),collection_id=(SELECT c.id FROM recipe_collections rc JOIN collections c ON c.id=rc.collection_id AND c.user_id=r.user_id WHERE rc.recipe_id=r.id AND rc.user_id=r.user_id ORDER BY lower(c.name) LIMIT 1),updated_at=now() WHERE r.user_id=${userId} AND r.collection_id IS NULL`,
     ]);
     return null;
   }

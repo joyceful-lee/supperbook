@@ -4,6 +4,9 @@ import {
   matchesRecipeFilter,
   mergeImportedRecipe,
   photoSource,
+  recipeCollections,
+  collectionSortKey,
+  reorderMeals,
 } from "../lib/recipe-management.ts";
 import { shoppingList, type Recipe } from "../lib/domain.ts";
 const recipe: Recipe = {
@@ -70,4 +73,23 @@ test("photo credits expose online sources without claiming third-party AI proven
   );
   assert.equal(photoSource("javascript:alert(1)"), null);
   assert.equal(photoSource(""), null);
+});
+
+test("one recipe appears in all assigned collections without changing its identity", () => {
+  const shared = { ...recipe, archived: false, collections: ["Sunday suppers", "Quick dinners"] };
+  assert.equal(matchesRecipeFilter(shared,"Sunday suppers"),true);
+  assert.equal(matchesRecipeFilter(shared,"Quick dinners"),true);
+  assert.equal(matchesRecipeFilter(shared,"Unfiled"),false);
+  assert.equal(collectionSortKey(shared),"Quick dinners");
+  assert.deepEqual(recipeCollections({ ...shared, collections: [] }),[]);
+  assert.equal(matchesRecipeFilter({ ...shared, collections: [] },"Unfiled"),true);
+  assert.equal(mergeImportedRecipe(shared,{ collections:["Imported"] }).collections,shared.collections);
+});
+test("live drag reorder moves only the dragged meal and preserves the other meals' order", () => {
+  const original = ["pasta","soup","salad","curry"];
+  const moved = reorderMeals(original,"pasta","salad");
+  assert.deepEqual(moved,["soup","salad","pasta","curry"]);
+  assert.deepEqual(reorderMeals(moved,"pasta","soup"),original);
+  assert.deepEqual(original,["pasta","soup","salad","curry"]);
+  assert.equal(reorderMeals(original,"missing","soup"),original);
 });

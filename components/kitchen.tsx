@@ -23,11 +23,16 @@ import {
   Users,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRecipeExit } from "@/components/use-recipe-exit";
 import { authClient } from "@/lib/auth-client";
 import { examples } from "@/lib/examples";
 import {
   matchesRecipeFilter,
+  recipeCollections,
+  collectionLabel,
+  collectionSortKey,
+  reorderMeals,
   mergeImportedRecipe,
   photoSource,
   type Collection,
@@ -43,6 +48,7 @@ import {
   type Recipe,
 } from "@/lib/domain";
 import { exportShoppingList, shoppingText, planText } from "@/lib/list-export";
+const SortableMeals = dynamic(() => import("@/components/sortable-meals"));
 type Snapshot = {
   collections: Collection[];
   recipes: Recipe[];
@@ -143,7 +149,9 @@ export default function Kitchen() {
     id: string;
     name: string;
   } | null>(null);
-  const [draggedMeal, setDraggedMeal] = useState<string | null>(null);
+  const [sidebarCollectionsOpen, setSidebarCollectionsOpen] = useState(true);
+  const [openIngredientCategories, setOpenIngredientCategories] = useState<string[]>([]);
+  const [newRecipeCollection, setNewRecipeCollection] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const stateQueue = useRef(Promise.resolve());
   const { requestExit: requestDraftExit, cancelExit, confirmExit, confirmOpen } = useRecipeExit(!!draft, busy, () => {
@@ -226,6 +234,8 @@ export default function Kitchen() {
       list = [...list].sort((a, b) => a.minutes - b.minutes);
     if (sort === "az")
       list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === "collections")
+      list = [...list].sort((a,b) => collectionSortKey(a).localeCompare(collectionSortKey(b)) || a.title.localeCompare(b.title));
     return list;
   }, [recipes, filter, search, sort]);
   const shopping = shoppingList(
@@ -236,7 +246,7 @@ export default function Kitchen() {
   const collections = session?.user
     ? [
         ...data.collections.map((c) => c.name),
-        ...(data.recipes.some((r) => r.collection === "Unfiled")
+        ...(data.recipes.some((r) => recipeCollections(r).length === 0)
           ? ["Unfiled"]
           : []),
       ]
@@ -466,7 +476,7 @@ export default function Kitchen() {
       setToast(
         deleteTarget.kind === "recipe"
           ? "Recipe permanently deleted."
-          : "Collection deleted. Its recipes are now Unfiled.",
+          : "Collection deleted. Recipes keep their other collections.",
       );
       setDeleteTarget(null);
     } catch (e) {
@@ -559,11 +569,7 @@ export default function Kitchen() {
     }
   }
   function moveMeal(id: string, target: string) {
-    const order = selected.map((r) => r.id);
-    const from = order.indexOf(id), to = order.indexOf(target);
-    if (from < 0 || to < 0 || from === to) return;
-    order.splice(from, 1); order.splice(to, 0, id);
-    persistState(data.meals, data.checked, order);
+    persistState(data.meals, data.checked, reorderMeals(selected.map((r) => r.id), id, target));
   }
   async function share(kind: "meals" | "shopping") {
     const text = kind === "meals" ? planText(selected, data.meals) : shoppingText(shopping, data.checked);
@@ -644,7 +650,9 @@ export default function Kitchen() {
         </nav>
         <div className="sidebar-section">
           <div className="collection-section-title">
-            <span className="eyebrow">YOUR COLLECTIONS</span>
+            <button className="collections-toggle" aria-expanded={sidebarCollectionsOpen} aria-controls="sidebar-collections" onClick={() => setSidebarCollectionsOpen(!sidebarCollectionsOpen)}>
+              <span className="eyebrow">YOUR COLLECTIONS</span><ChevronDown size={14} className={sidebarCollectionsOpen ? "expanded" : ""} />
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -659,6 +667,7 @@ export default function Kitchen() {
               Manage
             </button>
           </div>
+          <div id="sidebar-collections" hidden={!sidebarCollectionsOpen}>
           {collections.map((collection, index) => (
             <button
               key={collection}
@@ -678,12 +687,13 @@ export default function Kitchen() {
               <span>
                 {
                   recipes.filter(
-                    (r) => !r.archived && r.collection === collection,
+                    (r) => !r.archived && matchesRecipeFilter(r, collection),
                   ).length
                 }
               </span>
             </button>
           ))}
+          </div>
         </div>
         <div className="account">
           {session?.user ? (
@@ -841,6 +851,7 @@ export default function Kitchen() {
                       <option value="recent">Recently saved</option>
                       <option value="quick">Quickest first</option>
                       <option value="az">Recipe name</option>
+                      <option value="collections">Collections</option>
                     </select>
                     <ChevronDown size={13} />
                   </label>
@@ -871,7 +882,7 @@ export default function Kitchen() {
                           <FoodImage src={recipe.imageUrl} alt={recipe.title} />
                         </button>
                         <span className="card-category">
-                          {recipe.collection}
+                          {collectionLabel(recipe)}
                         </span>
                         <button
                           disabled={busy}
@@ -970,16 +981,13 @@ export default function Kitchen() {
                 )}
               </div>
               {selected.length ? (
-                <div className="meal-list">
-                  {selected.map((recipe, index) => (
-                    <article className={`meal-row ${draggedMeal === recipe.id ? "dragging" : ""}`} key={recipe.id}
-                      onDragOver={(event) => { if (draggedMeal) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
-                      onDrop={(event) => { event.preventDefault(); if (draggedMeal) moveMeal(draggedMeal, recipe.id); setDraggedMeal(null); }}>
+                <SortableMeals items={selected.map((recipe) => recipe.id)} labels={Object.fromEntries(selected.map((recipe) => [recipe.id, recipe.title]))}
+                  onReorder={(order) => persistState(data.meals, data.checked, order)}
+                  renderItem={(_id, index, handleProps) => {
+                    const recipe = selected[index];
+                    return <>
                       <div className="meal-reorder">
-                        <button type="button" className="drag-handle" draggable
-                          aria-label={`Drag ${recipe.title} to reorder`}
-                          onDragStart={(event) => { setDraggedMeal(recipe.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", recipe.id); }}
-                          onDragEnd={() => setDraggedMeal(null)}>⋮⋮</button>
+                        <button type="button" {...handleProps} className="drag-handle" aria-label={`Drag ${recipe.title} to reorder`}>⋮⋮</button>
                         <button type="button" disabled={index === 0} aria-label={`Move ${recipe.title} up`} onClick={() => moveMeal(recipe.id, selected[index - 1].id)}>↑</button>
                         <button type="button" disabled={index === selected.length - 1} aria-label={`Move ${recipe.title} down`} onClick={() => moveMeal(recipe.id, selected[index + 1].id)}>↓</button>
                       </div>
@@ -993,7 +1001,7 @@ export default function Kitchen() {
                       >
                         {recipe.title}
                         <small>
-                          {recipe.minutes} minutes · {recipe.collection}
+                          {recipe.minutes} minutes · {collectionLabel(recipe)}
                         </small>
                       </button>
                       <label>
@@ -1026,9 +1034,9 @@ export default function Kitchen() {
                       >
                         <X size={19} />
                       </button>
-                    </article>
-                  ))}
-                </div>
+                    </>;
+                  }}
+                />
               ) : (
                 <Empty
                   title="A few good meals, all in one place"
@@ -1169,11 +1177,13 @@ export default function Kitchen() {
                         i.name.toLowerCase().includes(search.toLowerCase()),
                     );
                     return items.length ? (
-                      <section key={category}>
+                      <section key={category} className="ingredient-category">
                         <h2>
-                          {category}
-                          <span>{items.length}</span>
+                          <button className="ingredient-category-toggle" aria-expanded={!!search || openIngredientCategories.includes(category)} aria-controls={`ingredients-${category.replace(/[^a-z]/gi,"")}`} onClick={() => setOpenIngredientCategories((open) => open.includes(category) ? open.filter((name) => name !== category) : [...open, category])}>
+                            <span>{category}</span><span className="category-count">{items.length}</span><ChevronDown size={16} />
+                          </button>
                         </h2>
+                        {(!!search || openIngredientCategories.includes(category)) && <div id={`ingredients-${category.replace(/[^a-z]/gi,"")}`}>
                         {items.map((i) => (
                           <div className="ingredient-item" key={i.id}>
                             <span>{i.name}</span>
@@ -1189,6 +1199,7 @@ export default function Kitchen() {
                             </small>
                           </div>
                         ))}
+                        </div>}
                       </section>
                     ) : null;
                   })}
@@ -1252,7 +1263,7 @@ export default function Kitchen() {
                   plan.
                 </p>
               )}
-              <span className="eyebrow">{detail.collection}</span>
+              <span className="eyebrow">{collectionLabel(detail)}</span>
               <h2>{detail.title}</h2>
               <p>{detail.description}</p>
               <div className="detail-meta">
@@ -1456,23 +1467,30 @@ export default function Kitchen() {
                   }
                 />
               </label>
-              <label>
-                Collection
-                <input
-                  required
-                  list="collections"
-                  maxLength={80}
-                  value={draft.collection}
-                  onChange={(e) =>
-                    setDraft({ ...draft, collection: e.target.value })
-                  }
-                />
-                <datalist id="collections">
-                  {collections.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </label>
+              <fieldset className="recipe-collections-picker">
+                <legend>Collections</legend>
+                <div className="recipe-collection-options">
+                  {[...new Set([...collections.filter((name) => name !== "Unfiled"), ...recipeCollections(draft)])].map((name) =>
+                    <label key={name}><input type="checkbox" checked={recipeCollections(draft).includes(name)} onChange={(event) => {
+                      const selected = recipeCollections(draft);
+                      const next = event.target.checked ? [...selected, name] : selected.filter((value) => value !== name);
+                      setDraft({ ...draft, collections: next, collection: next[0] || "Unfiled" });
+                    }} />{name}</label>
+                  )}
+                </div>
+                {!recipeCollections(draft).length && <p>Unfiled until you choose a collection.</p>}
+                <div className="new-recipe-collection">
+                  <input aria-label="New collection name for recipe" maxLength={80} placeholder="New collection name" value={newRecipeCollection} onChange={(event) => setNewRecipeCollection(event.target.value)} />
+                  <button type="button" className="outline" disabled={!newRecipeCollection.trim()} onClick={() => {
+                    const name = newRecipeCollection.trim().replace(/\s+/g, " ");
+                    if (["unfiled","all recipes","favorites","archived"].includes(name.toLowerCase())) { setError("Please choose a different collection name."); return; }
+                    const names = recipeCollections(draft);
+                    const existing = [...collections, ...names].find((value) => value.toLowerCase() === name.toLowerCase()) || name;
+                    if (!names.includes(existing)) setDraft({ ...draft, collections: [...names, existing], collection: names[0] || existing });
+                    setNewRecipeCollection("");
+                  }}>Add</button>
+                </div>
+              </fieldset>
             </div>
             <div className="form-grid">
               <label>
@@ -1720,7 +1738,7 @@ export default function Kitchen() {
           <h2>Make room for what you cook.</h2>
           <p className="collection-explainer">
             Create a collection for any kind of cooking. Renaming it updates its
-            recipes, and deleting it keeps them safely in Unfiled.
+            recipes. Removing a collection keeps its recipes in their other collections, or Unfiled when none remain.
           </p>
           <form onSubmit={saveCollection}>
             <label>
@@ -1770,7 +1788,7 @@ export default function Kitchen() {
                     {c.name}
                     <small>
                       {
-                        data.recipes.filter((r) => r.collection === c.name)
+                        data.recipes.filter((r) => recipeCollections(r).includes(c.name))
                           .length
                       }{" "}
                       recipes
@@ -1851,7 +1869,7 @@ export default function Kitchen() {
                 "” and its cooking notes will be permanently deleted. You can archive it instead if you might want it later."
               : "“" +
                 deleteTarget.name +
-                "” will be removed. Its recipes will be kept in Unfiled, including any archived recipes."}
+                "” will be removed. Its recipes keep their other collections and move to Unfiled only when none remain."}
           </p>
           {error && (
             <p className="form-error" role="alert">
