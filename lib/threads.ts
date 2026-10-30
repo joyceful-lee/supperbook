@@ -1,12 +1,8 @@
 export type ThreadParticipant={id:string;displayName:string};
 export type Mention=ThreadParticipant;
 export function mentionsInBody(body:string,selected:Mention[]):Mention[] {
- return selected.filter(person=>{
-  const token='@'+person.displayName;
-  let index=body.indexOf(token);
-  while(index!==-1){const before=body[index-1],after=body[index+token.length];if((!before||!/[\p{L}\p{N}_@]/u.test(before))&&(!after||!/[\p{L}\p{N}_]/u.test(after)))return true;index=body.indexOf(token,index+1);}
-  return false;
- }).filter((person,index,all)=>all.findIndex(other=>other.id===person.id)===index);
+ const present=new Set(mentionSegments(body,selected).filter(part=>part.mention).map(part=>part.text));
+ return selected.filter(person=>present.has('@'+person.displayName)).filter((person,index,all)=>all.findIndex(other=>other.id===person.id)===index);
 }
 export function mentionSegments(body:string,mentions:Mention[]):{text:string;mention:boolean}[] {
  const result:{text:string;mention:boolean}[]=[];

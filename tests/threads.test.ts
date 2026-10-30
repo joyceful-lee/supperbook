@@ -14,6 +14,10 @@ test('mention rendering keeps ordinary text and overlapping names intact',()=>{
  assert.deepEqual(result.filter(part=>part.mention).map(part=>part.text),['@Anna','@Ann']);
  assert.deepEqual(mentionSegments('<script>plain text</script>',[]),[{text:'<script>plain text</script>',mention:false}]);
 });
+test('longer selected names do not also notify matching first names',()=>{
+ const people=[{id:'jo',displayName:'Jo'},{id:'jo-lee',displayName:'Jo Lee'},{id:'ann',displayName:'Ann'},{id:'ann-marie',displayName:'Ann-Marie'}];
+ assert.deepEqual(mentionsInBody('Thanks @Jo Lee and @Ann-Marie.',people).map(person=>person.id),['jo-lee','ann-marie']);
+});
 test('removed comments do not expose their original author, body, or mentions',()=>{
  const result=publicComment({id:'comment',body:'Private removed text',authorName:'Original cook',authorId:'public-profile',deleted:true,mentions:[{id:'target',displayName:'Target'}],canEdit:true,canDelete:true,canRestore:true,replyCount:3});
  assert.equal(result.body,'');assert.equal(result.authorId,null);assert.equal(result.authorName,'Comment removed');assert.deepEqual(result.mentions,[]);assert.equal(result.canEdit,false);assert.equal(result.canDelete,false);assert.equal(result.canRestore,true);assert.equal(result.replyCount,3);
