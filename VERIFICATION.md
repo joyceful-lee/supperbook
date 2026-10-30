@@ -1,6 +1,20 @@
 # Verification record
 
-Latest review: October 29, 2026 (America/Los_Angeles).
+Latest review: October 30, 2026 (America/Los_Angeles).
+
+## Community update — 2026-10-30
+
+Applied additive migration `db/006_community.sql`. All five existing recipes remained private; no existing recipe or account was opted into public sharing. The three community tables have RLS enabled, foreign keys cascade from permanently deleted recipes, and community reads/writes remain server-only.
+
+The first preview `dpl_2fzwYbEPuqC1rrEZRFfjGuVLwxYg` passed a clean install, 30 tests, TypeScript and the production build. Browser verification used only the previously authorized kitchen-review test account in the protected preview. Its authored pasta recipe was temporarily shared as Review kitchen, liked, and given a generic cooking note. The comment persisted and was edited successfully. The removal confirmation was opened and canceled; no permanent deletion was performed. The like was cleared and the recipe made private again before release.
+
+Signed-out browsing opened the copied public link and showed the shared recipe and its edited comment, with no edit/remove controls. Saving a private copy requested sign-in; signing in preserved the selected public recipe. The actual anonymous API JSON omitted personal notes, collections, account identifiers, emails and internal ingredient references. Unpublishing removed the recipe from the feed, returned a no-longer-public error from the public API, and removed its content from a freshly loaded shared link. The original meal plan and recipe contents were retained. The test comment remains attached to the private test recipe and is hidden.
+
+A 390 × 844 review of the actual shared recipe and comment form found no horizontal overflow; both fields fit inside the viewport. The temporary viewport override was reset. Public source/photo links remain visible, and no generated imagery was introduced.
+
+The final preview `dpl_8z27772gjszYv9ZUVk3JV7X2WKz3` passed all 31 tests, TypeScript and the clean production build. Browser checks confirmed Manage your recipe opens the owned visibility controls, signing out replaces the comment form with Sign in to comment, and the public API emits full microsecond ISO timestamps. The test recipe was made private and the test account signed out again.
+
+The final source also gates the comment form before sign-in, offers owner management from the public view, explains that saved copies remain independent, and preserves PostgreSQL microseconds in pagination cursors so adjacent records are not skipped. Five community tests exercise the public field boundary, compact feed payloads, comment identity filtering, cursor validation and timestamp precision (31 total regression tests). Two-account interaction was not exercised; cross-user write restrictions are enforced in the authenticated SQL predicates and public permission flags.
 
 ## Recommendation update — 2026-10-29
 

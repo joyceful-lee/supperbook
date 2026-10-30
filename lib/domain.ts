@@ -29,6 +29,7 @@ export type Recipe = {
   notes: string;
   favorite: boolean;
   archived?: boolean;
+  isPublic?: boolean;
   collectionId?: string | null;
   cuisine?: string;
   externalProvider?: "themealdb" | null;

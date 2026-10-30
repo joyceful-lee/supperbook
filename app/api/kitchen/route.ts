@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       const recipeId = z.string().uuid().parse(body.id);
       const archived = z.boolean().parse(body.archived);
       const [result] = await sql.transaction([
-        sql`UPDATE recipes SET archived=${archived},updated_at=now() WHERE id=${recipeId} AND user_id=${id} RETURNING id`,
+        sql`UPDATE recipes SET archived=${archived},is_public=CASE WHEN ${archived} THEN false ELSE is_public END,published_at=CASE WHEN ${archived} THEN NULL ELSE published_at END,updated_at=now() WHERE id=${recipeId} AND user_id=${id} RETURNING id`,
         sql`UPDATE kitchen_state SET meals=meals-${recipeId}::text,checked='[]'::jsonb,updated_at=now() WHERE user_id=${id} AND ${archived}=true AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipeId} AND user_id=${id} AND archived=true)`,
       ]);
       if (!result.length)

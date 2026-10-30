@@ -52,6 +52,8 @@ import {
   type Recipe,
 } from "@/lib/domain";
 import { exportShoppingList, shoppingText, planText } from "@/lib/list-export";
+const Community = dynamic(() => import("@/components/community"));
+const RecipeVisibility = dynamic(() => import("@/components/recipe-visibility"));
 const Discover = dynamic(() => import("@/components/discover"));
 const SortableMeals = dynamic(() => import("@/components/sortable-meals"));
 type Snapshot = {
@@ -129,6 +131,11 @@ export default function Kitchen() {
     id: string;
     name: string;
   } | null>(null);
+  const [communityRecipeId,setCommunityRecipeId] = useState("");
+  useEffect(() => {
+    const shared = new URLSearchParams(window.location.search).get("shared");
+    if (shared && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shared)) { setCommunityRecipeId(shared); setView("community"); }
+  }, []);
   const [sidebarCollectionsOpen, setSidebarCollectionsOpen] = useState(true);
   const [openIngredientCategories, setOpenIngredientCategories] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
@@ -619,6 +626,9 @@ export default function Kitchen() {
           <button className={view === "discover" ? "nav-item active" : "nav-item"} onClick={() => navigate("discover")}>
             <Compass size={19} />Discover
           </button>
+          <button className={view === "community" ? "nav-item active" : "nav-item"} onClick={() => {setCommunityRecipeId("");navigate("community");}}>
+            <Users size={19}/>Community
+          </button>
           <button
             className={view === "meals" ? "nav-item active" : "nav-item"}
             onClick={() => navigate("meals")}
@@ -753,6 +763,8 @@ export default function Kitchen() {
               <div className="eyebrow">
                 {view === "recipes"
                   ? "THE PERSONAL COOKBOOK"
+                  : view === "community"
+                    ? "FROM OTHER KITCHENS"
                   : view === "discover"
                     ? "FOR YOUR NEXT MEAL"
                     : view === "ingredients"
@@ -768,6 +780,8 @@ export default function Kitchen() {
                     : !["All recipes", "Favorites"].includes(filter)
                       ? filter
                       : "Your recipe collection"
+                  : view === "community"
+                    ? "Community recipes"
                   : view === "discover"
                     ? "Discover recipes"
                     : view === "ingredients"
@@ -780,7 +794,7 @@ export default function Kitchen() {
               {view === "ingredients" && <p>A shared cupboard of ingredients, ready for your next recipe.</p>}
               {view === "shopping" && <p>Everything for your selected meals, gathered into one list.</p>}
             </div>
-            {view !== "discover" && (
+            {view !== "discover" && view !== "community" && (
             <button
               className="primary"
               onClick={() => {
@@ -809,6 +823,7 @@ export default function Kitchen() {
               </button>
             </div>
           )}
+          {view === "community" && <Community onManage={id=>{const recipe=data.recipes.find(recipe=>recipe.id===id);if(recipe)setDetail(recipe);else setError("Your recipe is still loading. Please try again.");}} isSignedIn={!!session?.user} key={session?.user?.id || "public"} recipeId={communityRecipeId} onSelect={setCommunityRecipeId} requireUser={requireUser} onSave={reviewRecommendation}/> }
           {view === "discover" && <Discover key={session?.user?.id || "preview"}
             contextKey={recommendationContext}
             requireUser={requireUser} onPreview={setDetail} onReview={reviewRecommendation} onPlan={plan} />}
@@ -1329,6 +1344,9 @@ export default function Kitchen() {
                 </button>
                 )}
               </div>
+              {data.recipes.some(recipe=>recipe.id===detail.id) && !detail.archived && <RecipeVisibility key={detail.id} recipe={detail}
+                onChange={isPublic=>{if(!isPublic && view==="community")setCommunityRecipeId("");setData(current=>({...current,recipes:current.recipes.map(recipe=>recipe.id===detail.id?{...recipe,isPublic}:recipe)}));setDetail(current=>current?{...current,isPublic}:null);}}
+                onCommunity={()=>{setCommunityRecipeId(detail.id);setDetail(null);navigate("community");}}/>}
               <div className="detail-sections">
                 <section>
                   <h3>Ingredients</h3>
@@ -1442,6 +1460,7 @@ export default function Kitchen() {
               imported values before saving; your collection and cooking notes
               are kept.
             </p>
+            {data.recipes.some(recipe=>recipe.id===draft.id && recipe.isPublic) && <p className="discovery-notice">This recipe is public. Saved changes to its photo, ingredients and method will be visible in the community. Cooking notes stay private.</p>}
             {!!draft.externalProvider && (!draft.servings || !draft.minutes) && <p className="discovery-notice">Confirm the number of servings before saving. Add a cooking time if the source provides one.</p>}
             <label>
               Recipe name
