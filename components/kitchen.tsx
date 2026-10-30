@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Compass,
   Heart,
   Leaf,
   Link2,
@@ -24,6 +25,8 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import FoodImage from "@/components/food-image";
+import { cuisineOptions } from "@/lib/recommendations";
 import CollectionDropdown from "@/components/collection-dropdown";
 import { useRecipeExit } from "@/components/use-recipe-exit";
 import { authClient } from "@/lib/auth-client";
@@ -49,6 +52,7 @@ import {
   type Recipe,
 } from "@/lib/domain";
 import { exportShoppingList, shoppingText, planText } from "@/lib/list-export";
+const Discover = dynamic(() => import("@/components/discover"));
 const SortableMeals = dynamic(() => import("@/components/sortable-meals"));
 type Snapshot = {
   collections: Collection[];
@@ -88,31 +92,6 @@ const emptyRecipe = (): Recipe => ({
   favorite: false,
   ingredients: [{ name: "", quantity: null, unit: "", preparation: "" }],
 });
-function FoodImage({
-  src,
-  alt,
-  className = "",
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  return src && !failed ? (
-    <img
-      className={className}
-      src={src}
-      alt={alt}
-      onError={() => setFailed(true)}
-    />
-  ) : (
-    <div className={`food-placeholder ${className}`}>
-      <Leaf size={48} strokeWidth={1} />
-      <span>A recipe worth keeping</span>
-    </div>
-  );
-}
 export default function Kitchen() {
   const { data: session, isPending } = authClient.useSession();
   const [data, setData] = useState<Snapshot>({
@@ -231,7 +210,7 @@ export default function Kitchen() {
           .includes(search.toLowerCase()),
     );
     if (sort === "quick")
-      list = [...list].sort((a, b) => a.minutes - b.minutes);
+      list = [...list].sort((a, b) => (a.minutes || Number.MAX_SAFE_INTEGER) - (b.minutes || Number.MAX_SAFE_INTEGER));
     if (sort === "az")
       list = [...list].sort((a, b) => a.title.localeCompare(b.title));
     if (sort === "collections")
@@ -252,6 +231,17 @@ export default function Kitchen() {
       ]
     : [...new Set(examples.map((r) => r.collection))];
   const selected = mealOrder(data.meals, data.mealOrder).map((id) => data.recipes.find((r) => r.id === id && !r.archived)).filter((r): r is Recipe => !!r);
+  const recommendationContext = useMemo(() => JSON.stringify([data.recipes, data.meals]), [data.recipes, data.meals]);
+  function reviewRecommendation(recipe: Recipe) {
+    if (!requireUser()) return;
+    setDraft({
+      ...recipe,
+      id: crypto.randomUUID(),
+      ingredients: recipe.ingredients.map(line => ({ ...line, ingredientId: data.ingredients.find(ingredient=>normalizeName(ingredient.name)===normalizeName(line.name))?.id })),
+    });
+    setError("");
+  }
+  const externalPreview = !!detail?.externalProvider && !data.recipes.some(recipe=>recipe.id===detail.id);
   function requireUser() {
     if (session?.user) return true;
     setAuthMode("signin");
@@ -626,6 +616,9 @@ export default function Kitchen() {
                 : "04"}
             </span>
           </button>
+          <button className={view === "discover" ? "nav-item active" : "nav-item"} onClick={() => navigate("discover")}>
+            <Compass size={19} />Discover
+          </button>
           <button
             className={view === "meals" ? "nav-item active" : "nav-item"}
             onClick={() => navigate("meals")}
@@ -760,7 +753,9 @@ export default function Kitchen() {
               <div className="eyebrow">
                 {view === "recipes"
                   ? "THE PERSONAL COOKBOOK"
-                  : view === "ingredients"
+                  : view === "discover"
+                    ? "FOR YOUR NEXT MEAL"
+                    : view === "ingredients"
                     ? "THE BUILDING BLOCKS"
                     : view === "meals"
                       ? "A LITTLE THOUGHT AHEAD"
@@ -773,7 +768,9 @@ export default function Kitchen() {
                     : !["All recipes", "Favorites"].includes(filter)
                       ? filter
                       : "Your recipe collection"
-                  : view === "ingredients"
+                  : view === "discover"
+                    ? "Discover recipes"
+                    : view === "ingredients"
                     ? "The ingredient library"
                     : view === "meals"
                       ? "What’s cooking?"
@@ -783,6 +780,7 @@ export default function Kitchen() {
               {view === "ingredients" && <p>A shared cupboard of ingredients, ready for your next recipe.</p>}
               {view === "shopping" && <p>Everything for your selected meals, gathered into one list.</p>}
             </div>
+            {view !== "discover" && (
             <button
               className="primary"
               onClick={() => {
@@ -801,6 +799,7 @@ export default function Kitchen() {
                   ? "Add a recipe"
                   : "Choose recipes"}
             </button>
+            )}
           </div>
           {error && !modal && (
             <div className="error-banner" role="alert">
@@ -810,6 +809,9 @@ export default function Kitchen() {
               </button>
             </div>
           )}
+          {view === "discover" && <Discover key={session?.user?.id || "preview"}
+            contextKey={recommendationContext}
+            requireUser={requireUser} onPreview={setDetail} onReview={reviewRecommendation} onPlan={plan} />}
           {view === "recipes" && (
             <>
               <div className="collection-toolbar">
@@ -926,7 +928,7 @@ export default function Kitchen() {
                         <div className="card-meta">
                           <span>
                             <Clock3 size={14} />
-                            {recipe.minutes} min
+                            {recipe.minutes > 0 ? `${recipe.minutes} min` : "Time not listed"}
                           </span>
                           <span>
                             <Users size={14} />
@@ -985,16 +987,17 @@ export default function Kitchen() {
                     ? `${selected.length} ${selected.length === 1 ? "meal" : "meals"} for the days ahead. Adjust the servings to suit your table.`
                     : "Your plan can be as simple as a couple of suppers. Add recipes from your collection to begin."}
                 </p>
-                {selected.length > 0 && (
-                  <div className="action-group">
+                <div className="action-group meal-plan-actions">
+                  <button className="outline" onClick={() => navigate("discover")}><Compass size={16}/>Suggest another meal</button>
+                  {selected.length > 0 && <>
                     <button className="outline" onClick={() => share("meals")}>Share meal plan</button>
                     <button className="outline" onClick={async () => {
                       try { await navigator.clipboard.writeText(planText(selected, data.meals)); setToast("Meal plan copied."); }
                       catch { setError("Clipboard access was unavailable."); }
                     }}>Copy plan</button>
                     <button className="outline" onClick={() => navigate("shopping")}>View shopping list <ArrowRight size={17} /></button>
-                  </div>
-                )}
+                  </>}
+                </div>
               </div>
               {selected.length ? (
                 <SortableMeals items={selected.map((recipe) => recipe.id)} labels={Object.fromEntries(selected.map((recipe) => [recipe.id, recipe.title]))}
@@ -1017,7 +1020,7 @@ export default function Kitchen() {
                       >
                         {recipe.title}
                         <small>
-                          {recipe.minutes} minutes · {collectionLabel(recipe)}
+                          {recipe.minutes > 0 ? `${recipe.minutes} minutes` : "Time not listed"} · {collectionLabel(recipe)}
                         </small>
                       </button>
                       <label>
@@ -1285,23 +1288,26 @@ export default function Kitchen() {
               <div className="detail-meta">
                 <span>
                   <Clock3 size={16} />
-                  {detail.minutes} minutes
+                  {detail.minutes > 0 ? `${detail.minutes} minutes` : "Time not listed"}
                 </span>
                 <span>
                   <Users size={16} />
-                  {detail.servings} servings
+                  {detail.servings > 0 ? `${detail.servings} servings` : "Servings not listed"}
                 </span>
               </div>
               {error && !modal && <p className="form-error" role="alert">{error}</p>}
+              {externalPreview && <p className="discovery-notice">This source does not list servings or cooking time. Confirm the servings before saving; you can leave time blank.</p>}
+              {detail.externalProvider==="themealdb" && <a className="discovery-attribution" target="_blank" rel="noreferrer" href={`https://www.themealdb.com/meal.php?c=${detail.externalId}`}>Recipe data from TheMealDB</a>}
               <div className="detail-actions">
                 <button
                   className="primary"
                   disabled={busy || !!detail.archived}
-                  onClick={() => plan(detail)}
+                  onClick={() => externalPreview ? reviewRecommendation(detail) : plan(detail)}
                 >
                   <Plus size={16} />
-                  Add to meal plan
+                  {externalPreview ? "Review and save recipe" : "Add to meal plan"}
                 </button>
+                {!externalPreview && (
                 <button
                   className="outline"
                   disabled={busy}
@@ -1321,6 +1327,7 @@ export default function Kitchen() {
                     ? "Edit recipe"
                     : "Save a copy"}
                 </button>
+                )}
               </div>
               <div className="detail-sections">
                 <section>
@@ -1435,6 +1442,7 @@ export default function Kitchen() {
               imported values before saving; your collection and cooking notes
               are kept.
             </p>
+            {!!draft.externalProvider && (!draft.servings || !draft.minutes) && <p className="discovery-notice">Confirm the number of servings before saving. Add a cooking time if the source provides one.</p>}
             <label>
               Recipe name
               <input
@@ -1464,7 +1472,7 @@ export default function Kitchen() {
                   max="1000"
                   step="0.5"
                   required
-                  value={draft.servings}
+                  value={draft.servings || ""}
                   onChange={(e) =>
                     setDraft({ ...draft, servings: Number(e.target.value) })
                   }
@@ -1476,12 +1484,16 @@ export default function Kitchen() {
                   type="number"
                   min="0"
                   max="10080"
-                  required
-                  value={draft.minutes}
+                  placeholder="Not listed"
+                  value={draft.minutes || ""}
                   onChange={(e) =>
                     setDraft({ ...draft, minutes: Number(e.target.value) })
                   }
                 />
+              </label>
+              <label>Cuisine (optional)
+                <input maxLength={80} list="cuisine-options" value={draft.cuisine || ""} onChange={event=>setDraft({...draft,cuisine:event.target.value})} placeholder="For example, Italian"/>
+                <datalist id="cuisine-options">{cuisineOptions.map(cuisine=><option key={cuisine} value={cuisine}/>)}</datalist>
               </label>
               <fieldset className="recipe-collections-picker">
                 <legend>Collections</legend>

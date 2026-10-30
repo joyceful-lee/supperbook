@@ -2160,3 +2160,44 @@ h1 {
   .collections-dropdown-tile > .collections-dropdown-trigger { opacity: 1; pointer-events: auto; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .collections-dropdown-tile > .collections-dropdown-trigger { transition: none; } }
+
+/* Recipe discovery uses the same notebook and recipe-card treatment. */
+.discover-intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 0 24px; border-top: 1px solid var(--line); }
+.discover-intro p { color: var(--muted); line-height: 1.7; }
+.discover-intro > button { flex-shrink: 0; }
+.discovery-preferences { border: 1px solid var(--line); border-radius: 4px; margin-bottom: 24px; }
+.discovery-preferences > summary { padding: 16px 18px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 9px; color: var(--green); }
+.discovery-preferences > summary::after { content: "+"; margin-left: auto; font-size: 20px; }
+.discovery-preferences[open] > summary::after { content: "−"; }
+.discovery-preferences form { padding: 5px 20px 20px; }
+.discovery-preferences fieldset { padding: 0; margin: 0 0 22px; border: 0; }
+.discovery-preferences legend { font-size: 12px; margin-bottom: 12px; }
+.cuisine-options { display: flex; flex-wrap: wrap; gap: 9px 18px; }
+.cuisine-options label { display: inline-flex; gap: 7px; align-items: center; font-size: 12px; cursor: pointer; }
+.cuisine-options input { accent-color: var(--green); }
+.discovery-preference-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap: 22px; margin-bottom: 20px; }
+.discovery-preference-fields label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.discovery-preference-fields input { border: 1px solid var(--line); border-radius: 3px; background: transparent; padding: 10px 12px; min-width: 0; }
+.discovery-preference-fields small { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.discovery-notice { padding: 13px 16px; margin: 14px 0; background: #ecefe3; color: #56634c; border-radius: 3px; font-size: 12px; line-height: 1.7; }
+.discovery-notice > button { margin-left: 10px; }
+.discovery-provider-note, .discovery-status { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+.discovery-card .card-title { margin-top: 0; }
+.discovery-card .card-body > .discovery-cuisine { margin: 9px 0; min-height: 0; color: #8a745f; }
+.recommendation-reasons { list-style: none; margin: 14px 0; padding: 0; color: #67725a; font-size: 11px; line-height: 1.7; }
+.recommendation-reasons li { margin-bottom: 4px; }
+.discovery-card .card-body > .discovery-extra { min-height: 0; font-size: 11px; margin: 12px 0; }
+.discovery-time { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin: 14px 0; }
+.discovery-attribution { display: inline-flex; font-size: 11px; color: var(--green); text-decoration: underline; text-underline-offset: 3px; margin: 0 0 14px; }
+.discovery-card-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 0 0; border-top: 1px solid var(--line); }
+.discovery-card-actions > .outline { font-size: 11px; padding: 9px 12px; }
+.recommendation-feedback { display: flex; gap: 6px; }
+.recommendation-feedback > button { width: 32px; height: 32px; border: 1px solid var(--line); color: #7c876d; }
+.recommendation-feedback > button[aria-pressed="true"] { background: #e0e6d5; color: var(--green); }
+.meal-plan-actions { max-width: 560px; justify-content: flex-end; }
+@media(max-width:700px) {
+ .discover-intro { align-items: flex-start; flex-direction: column; gap: 14px; }
+ .discovery-preference-fields { grid-template-columns: 1fr; }
+ .meal-plan-actions { justify-content: flex-start; }
+ .discovery-preferences form { padding: 4px 15px 16px; }
+}

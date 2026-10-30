@@ -30,6 +30,9 @@ export type Recipe = {
   favorite: boolean;
   archived?: boolean;
   collectionId?: string | null;
+  cuisine?: string;
+  externalProvider?: "themealdb" | null;
+  externalId?: string | null;
   ingredients: Line[];
 };
 export type Meals = Record<string, number>;

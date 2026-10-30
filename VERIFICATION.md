@@ -1,6 +1,24 @@
 # Verification record
 
-Reviewed October 25, 2026 (America/Los_Angeles).
+Latest review: October 29, 2026 (America/Los_Angeles).
+
+## Recommendation update — 2026-10-29
+
+Applied additive migration `db/005_recommendations.sql` to the existing Neon database. Personal preference, feedback and planning queries are authenticated and scoped to the current user. Provider provenance has a composite ownership foreign key and per-user provider-recipe uniqueness. New tables have RLS enabled; database access remains server-only.
+
+The first strict preview, `dpl_46hmekGKXiybYMjQ1SxQSQqEVF46`, passed a clean install, 24 tests, TypeScript and the production build. Its authenticated browser checks confirmed cuisine/time/skipped-ingredient preferences survive reload, whole-ingredient exclusions work, positive feedback is reflected in explanations, dismissal hides a recipe, Undo preserves a prior like, and Add to meal plan removes the suggestion while updating shopping. Preferences and feedback were restored through the UI.
+
+Development review deployment `dpl_3QsofKUsQhTX4WTdPzjqRRsfDCfv` passed 25 tests, TypeScript and the production build. It used the documented TheMealDB development key only in that isolated source-file preview; the repository and production provider reject test key 1. With explicit user authorization, the existing dedicated review account signed in. External discovery loaded real provider records, photos, attribution and shopping-overlap explanations. No personal account was accessed.
+
+A Banana Pancakes discovery was reviewed and saved to the test account through the actual editor and API. Empty servings triggered native required-field validation. Servings were entered as 2, time remained unknown (stored as 0), cuisine and preparation were edited, and Oil was matched to existing Olive oil. Four common missing ingredients were added through the library check; Baking Powder correctly offered similar Baking soda before a distinct ingredient was selected. The database confirmed one owned provider source (TheMealDB 52855), seven separate measured ingredient lines and the edited fields.
+
+Adding this recipe to the plan produced 16 shopping rows, with banana/egg counts, 125 g raspberries, 25 g pecans, 10 tsp combined oil and the original 300 ml milk. Archiving the test import restored the original two active meals and 11 shopping rows. The archived provider recipe no longer appeared in Discover. The test recipe remains archived; no permanent deletion was performed.
+
+A 390 × 844 responsive review found no horizontal overflow and showed stacked, usable preference inputs. The viewport was reset. Browser error/warning logs were empty before and after account checks. All 26 local tests pass. Later source refinements balance results across provider searches, normalize country-shaped cuisine labels, clear stale feedback notices and place unknown cooking times last in Quickest first. These have regression coverage where appropriate.
+
+Production external discovery requires `THEMEALDB_API_KEY` and a redeploy. The key was absent at the last environment-name check; saved-recipe recommendations work without it. Local dependency extraction remains incomplete, so clean Vercel compilation is the authoritative TypeScript/build result. Earlier entries below are historical verification records and their limitations are superseded by later checks.
+
+## Initial review — October 25, 2026
 
 ## Provisioned resources
 

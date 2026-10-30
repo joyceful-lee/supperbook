@@ -4,7 +4,7 @@ A personal recipe notebook built with Next.js, Neon Postgres, and Neon Auth, pre
 
 ## Development
 
-Use Node 22.17+ (Vercel uses Node 24). Run `npm ci --legacy-peer-deps`, copy `.env.example` to `.env.local`, fill in the three environment variables, and run `npm run dev`. The app opens at http://localhost:3100.
+Use Node 22.17+ (Vercel uses Node 24). Run `npm ci --legacy-peer-deps`, copy `.env.example` to `.env.local`, fill in the three required environment variables, and run `npm run dev`. The app opens at http://localhost:3100.
 
 The existing Neon project is `mute-moon-34257764`, branch `br-curly-grass-aki9bgto`, database `neondb` in AWS Oregon. Neon Auth uses its Better Auth integration. Never expose the database URL or auth cookie secret through a `NEXT_PUBLIC_` variable. `.env.local` and `.vercel` are ignored by Git.
 
@@ -55,3 +55,13 @@ Apply db/004_recipe_collections.sql after earlier migrations. It adds user-scope
 Ingredient sections start collapsed and automatically show search results. The sidebar collection list can be collapsed independently. Meal dragging previews the reordered rows and animates neighboring recipes; dropping saves the order, while canceling a drag restores the saved order. Move buttons remain available for keyboard and touch users.
 
 Collection selection uses a searchable multi-select dropdown in the editor. Recipe tiles show Add to collection on hover and keyboard focus, and keep it visible on touch devices. Tile selections are staged until Save collections, then update only that recipe’s collection membership through an authenticated, owner-scoped transaction. Editor selections remain part of the unsaved recipe draft.
+
+## Recipe recommendations
+
+Apply `db/005_recommendations.sql` after the earlier migrations. It adds recipe cuisine, user preferences and feedback, planning history, provider provenance, an expiring public-recipe cache and per-user discovery limits. All personal recommendation reads and writes are scoped to the authenticated user.
+
+Discover ranks saved recipes and optional TheMealDB suggestions using favorites, ingredient similarity, prior planning, preferred cuisines, cooking-time limits and thumbs-up feedback. It favors overlap with the current meal plan and adds variety. Ingredient-library entries are a shared catalog, not pantry inventory. Archived, already planned, dismissed and previously saved provider recipes are excluded. New users can review authored starter recipes.
+
+External recipes remain suggestions until Review and save opens an editable draft. TheMealDB does not supply servings or cooking time; servings must be entered before saving and unknown cooking time remains blank. Original publisher links, TheMealDB attribution and existing source photos are retained. Ingredient names must still be matched against the canonical library; quantities and preparation stay on recipe lines.
+
+For production discovery, obtain a production key from https://www.themealdb.com/api.php and add `THEMEALDB_API_KEY` to Vercel for the intended environments, then redeploy. Keep it server-only. Missing keys and the public development key `1` are rejected in production; recommendations from saved recipes continue working. Local `npm run dev` can use the documented development key. Server requests have a nine-second budget, a six-hour shared cache of public recipes, and a limit of 20 uncached discovery batches per user per hour. Only cuisine and ingredient keywords are sent to the provider. Provider failures fall back to local suggestions.

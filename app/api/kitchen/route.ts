@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { normalizeName, isWebUrl, capitalizeIngredient, mealOrder } from "@/lib/domain";
 import { importRecipe } from "@/lib/importer";
+import { kitchenSnapshot as snapshot } from "@/lib/kitchen-store";
 import { collectionAction } from "@/lib/collection-actions";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,27 +48,14 @@ const recipeSchema = z.object({
   instructions: z.array(z.string().max(6000)).max(100),
   notes: z.string().max(10000),
   favorite: z.boolean(),
+  cuisine: z.string().trim().max(80).optional(),
+  externalProvider: z.literal("themealdb").nullable().optional(),
+  externalId: z.string().regex(/^\d{1,12}$/).nullable().optional(),
   ingredients: z.array(lineSchema).min(1).max(100),
 });
 async function user() {
   const { data } = await auth.getSession();
   return data?.user?.id;
-}
-async function snapshot(id: string) {
-  const [recipes, ingredients, state, collections] = await Promise.all([
-    sql`SELECT r.id,r.title,r.description,r.image_url AS "imageUrl",r.source_url AS "sourceUrl",r.source_name AS "sourceName",r.servings::float8,r.minutes,r.collection,COALESCE((SELECT jsonb_agg(c.name ORDER BY lower(c.name)) FROM recipe_collections rc JOIN collections c ON c.id=rc.collection_id AND c.user_id=r.user_id WHERE rc.recipe_id=r.id AND rc.user_id=r.user_id),'[]') AS collections,r.instructions,r.notes,r.favorite,r.archived,r.collection_id AS "collectionId",COALESCE((SELECT jsonb_agg(jsonb_build_object('ingredientId',i.id,'name',i.name,'quantity',ri.quantity::float8,'unit',ri.unit,'preparation',ri.preparation,'originalText',ri.original_text) ORDER BY ri.position) FROM recipe_ingredients ri JOIN ingredients i ON i.id=ri.ingredient_id WHERE ri.recipe_id=r.id),'[]') AS ingredients FROM recipes r WHERE r.user_id=${id} ORDER BY r.updated_at DESC`,
-    sql`SELECT id,name,category FROM ingredients ORDER BY name`,
-    sql`SELECT meals,checked,meal_order FROM kitchen_state WHERE user_id=${id}`,
-    sql`SELECT id,name FROM collections WHERE user_id=${id} ORDER BY lower(name)`,
-  ]);
-  return {
-    recipes,
-    collections,
-    ingredients,
-    meals: state[0]?.meals || {},
-    checked: state[0]?.checked || [],
-    mealOrder: mealOrder(state[0]?.meals || {}, state[0]?.meal_order || []),
-  };
 }
 export async function GET() {
   try {
@@ -179,6 +167,12 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "saveRecipe") {
       const recipe = recipeSchema.parse(body.recipe);
+      if (!!recipe.externalProvider !== !!recipe.externalId)
+        return NextResponse.json({error:"The recipe source is incomplete."},{status:400});
+      if(recipe.externalProvider && recipe.externalId) {
+        const duplicate=await sql`SELECT recipe_id FROM recipe_sources WHERE user_id=${id} AND provider=${recipe.externalProvider} AND provider_recipe_id=${recipe.externalId} AND recipe_id<>${recipe.id}`;
+        if(duplicate.length) return NextResponse.json({error:"This recipe is already in your collection."},{status:409});
+      }
       const memberships = [...new Map((recipe.collections ?? [recipe.collection])
         .filter((name) => name !== "Unfiled").map((name) => [name.toLowerCase(),name])).values()];
       recipe.collection = memberships[0] || "Unfiled";
@@ -208,6 +202,10 @@ export async function POST(request: NextRequest) {
       await sql.transaction([
         sql`INSERT INTO collections(user_id,name) SELECT ${id},name FROM jsonb_array_elements_text(${JSON.stringify(memberships)}::jsonb) AS names(name) ON CONFLICT DO NOTHING`,
         sql`INSERT INTO recipes(id,user_id,title,description,image_url,source_url,source_name,servings,minutes,collection,collection_id,instructions,notes,favorite) VALUES(${recipe.id},${id},${recipe.title},${recipe.description},${recipe.imageUrl},${recipe.sourceUrl},${recipe.sourceName},${recipe.servings},${recipe.minutes},COALESCE((SELECT name FROM collections WHERE user_id=${id} AND lower(name)=lower(${recipe.collection})),${recipe.collection}),(SELECT id FROM collections WHERE user_id=${id} AND lower(name)=lower(${recipe.collection})),${JSON.stringify(recipe.instructions)}::jsonb,${recipe.notes},${recipe.favorite}) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,description=EXCLUDED.description,image_url=EXCLUDED.image_url,source_url=EXCLUDED.source_url,source_name=EXCLUDED.source_name,servings=EXCLUDED.servings,minutes=EXCLUDED.minutes,collection=EXCLUDED.collection,collection_id=EXCLUDED.collection_id,instructions=EXCLUDED.instructions,notes=EXCLUDED.notes,favorite=EXCLUDED.favorite,updated_at=now() WHERE recipes.user_id=${id}`,
+        sql`UPDATE recipes SET cuisine=${recipe.cuisine || ""} WHERE id=${recipe.id} AND user_id=${id}`,
+        ...(recipe.externalProvider && recipe.externalId ? [
+          sql`INSERT INTO recipe_sources(recipe_id,user_id,provider,provider_recipe_id,source_url) SELECT ${recipe.id},${id},${recipe.externalProvider},${recipe.externalId},${recipe.sourceUrl} WHERE EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id}) ON CONFLICT(recipe_id) DO UPDATE SET provider=EXCLUDED.provider,provider_recipe_id=EXCLUDED.provider_recipe_id,source_url=EXCLUDED.source_url WHERE recipe_sources.user_id=${id}`
+        ] : []),
         sql`DELETE FROM recipe_collections WHERE recipe_id=${recipe.id} AND user_id=${id}`,
         sql`INSERT INTO recipe_collections(recipe_id,collection_id,user_id) SELECT ${recipe.id},c.id,${id} FROM collections c WHERE c.user_id=${id} AND lower(c.name) IN (SELECT lower(name) FROM jsonb_array_elements_text(${JSON.stringify(memberships)}::jsonb) AS names(name)) AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id})`,
         sql`DELETE FROM recipe_ingredients WHERE recipe_id=${recipe.id} AND EXISTS(SELECT 1 FROM recipes WHERE id=${recipe.id} AND user_id=${id})`,
@@ -247,7 +245,11 @@ export async function POST(request: NextRequest) {
           { error: "Choose recipes from your own collection." },
           { status: 400 },
         );
-      await sql`INSERT INTO kitchen_state(user_id,meals,checked,meal_order) VALUES(${id},${JSON.stringify(state.meals)}::jsonb,${JSON.stringify(state.checked)}::jsonb,${JSON.stringify(mealOrder(state.meals,state.mealOrder))}::jsonb) ON CONFLICT(user_id) DO UPDATE SET meals=EXCLUDED.meals,checked=EXCLUDED.checked,meal_order=EXCLUDED.meal_order,updated_at=now()`;
+      await sql.transaction([
+        sql`SELECT user_id FROM kitchen_state WHERE user_id=${id} FOR UPDATE`,
+        sql`INSERT INTO recipe_activity(user_id,recipe_id) SELECT ${id},r.id FROM recipes r WHERE r.user_id=${id} AND r.archived=false AND r.id::text IN (SELECT jsonb_object_keys(${JSON.stringify(state.meals)}::jsonb)) AND NOT EXISTS(SELECT 1 FROM kitchen_state ks WHERE ks.user_id=${id} AND ks.meals ? r.id::text) ON CONFLICT(user_id,recipe_id) DO UPDATE SET planned_count=recipe_activity.planned_count+1,last_planned_at=now()`,
+        sql`INSERT INTO kitchen_state(user_id,meals,checked,meal_order) VALUES(${id},${JSON.stringify(state.meals)}::jsonb,${JSON.stringify(state.checked)}::jsonb,${JSON.stringify(mealOrder(state.meals,state.mealOrder))}::jsonb) ON CONFLICT(user_id) DO UPDATE SET meals=EXCLUDED.meals,checked=EXCLUDED.checked,meal_order=EXCLUDED.meal_order,updated_at=now()`,
+      ]);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json(
