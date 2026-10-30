@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  Bell,
   Check,
   ChevronDown,
   Clock3,
@@ -25,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useNotificationCount } from "@/components/use-notification-count";
 import FoodImage from "@/components/food-image";
 import { cuisineOptions } from "@/lib/recommendations";
 import CollectionDropdown from "@/components/collection-dropdown";
@@ -52,6 +54,7 @@ import {
   type Recipe,
 } from "@/lib/domain";
 import { exportShoppingList, shoppingText, planText } from "@/lib/list-export";
+const Notifications = dynamic(() => import("@/components/notifications"));
 const Community = dynamic(() => import("@/components/community"));
 const RecipeVisibility = dynamic(() => import("@/components/recipe-visibility"));
 const Discover = dynamic(() => import("@/components/discover"));
@@ -96,6 +99,7 @@ const emptyRecipe = (): Recipe => ({
 });
 export default function Kitchen() {
   const { data: session, isPending } = authClient.useSession();
+  const {count:unreadNotifications,refresh:refreshNotifications}=useNotificationCount(session?.user?.id);
   const [data, setData] = useState<Snapshot>({
     collections: [],
     recipes: [],
@@ -132,6 +136,7 @@ export default function Kitchen() {
     name: string;
   } | null>(null);
   const [communityRecipeId,setCommunityRecipeId] = useState("");
+  const [communityThreadId,setCommunityThreadId] = useState("");
   useEffect(() => {
     const shared = new URLSearchParams(window.location.search).get("shared");
     if (shared && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shared)) { setCommunityRecipeId(shared); setView("community"); }
@@ -626,9 +631,10 @@ export default function Kitchen() {
           <button className={view === "discover" ? "nav-item active" : "nav-item"} onClick={() => navigate("discover")}>
             <Compass size={19} />Discover
           </button>
-          <button className={view === "community" ? "nav-item active" : "nav-item"} onClick={() => {setCommunityRecipeId("");navigate("community");}}>
+          <button className={view === "community" ? "nav-item active" : "nav-item"} onClick={() => {setCommunityRecipeId("");setCommunityThreadId("");navigate("community");}}>
             <Users size={19}/>Community
           </button>
+          <button className={view === "notifications" ? "nav-item active" : "nav-item"} onClick={()=>{if(requireUser())navigate("notifications");}}><Bell size={19}/>Notifications{unreadNotifications>0&&<span className="nav-count" aria-label={`${unreadNotifications} unread notifications`}>{unreadNotifications>99?"99+":unreadNotifications}</span>}</button>
           <button
             className={view === "meals" ? "nav-item active" : "nav-item"}
             onClick={() => navigate("meals")}
@@ -763,6 +769,8 @@ export default function Kitchen() {
               <div className="eyebrow">
                 {view === "recipes"
                   ? "THE PERSONAL COOKBOOK"
+                  : view === "notifications"
+                    ? "FROM YOUR COMMUNITY"
                   : view === "community"
                     ? "FROM OTHER KITCHENS"
                   : view === "discover"
@@ -780,6 +788,8 @@ export default function Kitchen() {
                     : !["All recipes", "Favorites"].includes(filter)
                       ? filter
                       : "Your recipe collection"
+                  : view === "notifications"
+                    ? "Notifications"
                   : view === "community"
                     ? "Community recipes"
                   : view === "discover"
@@ -794,7 +804,7 @@ export default function Kitchen() {
               {view === "ingredients" && <p>A shared cupboard of ingredients, ready for your next recipe.</p>}
               {view === "shopping" && <p>Everything for your selected meals, gathered into one list.</p>}
             </div>
-            {view !== "discover" && view !== "community" && (
+            {view !== "discover" && view !== "community" && view !== "notifications" && (
             <button
               className="primary"
               onClick={() => {
@@ -823,7 +833,9 @@ export default function Kitchen() {
               </button>
             </div>
           )}
-          {view === "community" && <Community onManage={id=>{const recipe=data.recipes.find(recipe=>recipe.id===id);if(recipe)setDetail(recipe);else setError("Your recipe is still loading. Please try again.");}} isSignedIn={!!session?.user} key={session?.user?.id || "public"} recipeId={communityRecipeId} onSelect={setCommunityRecipeId} requireUser={requireUser} onSave={reviewRecommendation}/> }
+          {view === "notifications" && !session?.user && <div className="discovery-notice">Sign in to see your notifications and preferences. <button className="inline-link" onClick={requireUser}>Sign in</button></div>}
+          {view === "notifications" && session?.user && <Notifications key={session.user.id} onRefresh={refreshNotifications} onOpen={(recipeId,threadId)=>{setCommunityRecipeId(recipeId);setCommunityThreadId(threadId||"");navigate("community");}}/>}
+          {view === "community" && <Community initialThreadId={communityThreadId} onManage={id=>{const recipe=data.recipes.find(recipe=>recipe.id===id);if(recipe)setDetail(recipe);else setError("Your recipe is still loading. Please try again.");}} isSignedIn={!!session?.user} key={session?.user?.id || "public"} recipeId={communityRecipeId} onSelect={id=>{setCommunityRecipeId(id);setCommunityThreadId("");}} requireUser={requireUser} onSave={reviewRecommendation}/> }
           {view === "discover" && <Discover key={session?.user?.id || "preview"}
             contextKey={recommendationContext}
             requireUser={requireUser} onPreview={setDetail} onReview={reviewRecommendation} onPlan={plan} />}
@@ -1345,8 +1357,8 @@ export default function Kitchen() {
                 )}
               </div>
               {data.recipes.some(recipe=>recipe.id===detail.id) && !detail.archived && <RecipeVisibility key={detail.id} recipe={detail}
-                onChange={isPublic=>{if(!isPublic && view==="community")setCommunityRecipeId("");setData(current=>({...current,recipes:current.recipes.map(recipe=>recipe.id===detail.id?{...recipe,isPublic}:recipe)}));setDetail(current=>current?{...current,isPublic}:null);}}
-                onCommunity={()=>{setCommunityRecipeId(detail.id);setDetail(null);navigate("community");}}/>}
+                onChange={isPublic=>{if(!isPublic && view==="community"){setCommunityRecipeId("");setCommunityThreadId("");}setData(current=>({...current,recipes:current.recipes.map(recipe=>recipe.id===detail.id?{...recipe,isPublic}:recipe)}));setDetail(current=>current?{...current,isPublic}:null);}}
+                onCommunity={()=>{setCommunityRecipeId(detail.id);setCommunityThreadId("");setDetail(null);navigate("community");}}/>}
               <div className="detail-sections">
                 <section>
                   <h3>Ingredients</h3>

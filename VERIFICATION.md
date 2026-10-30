@@ -2,6 +2,18 @@
 
 Latest review: October 30, 2026 (America/Los_Angeles).
 
+## Replies, mentions and notifications — 2026-10-30
+
+Applied `db/007_threads_notifications.sql`. Replies have a same-recipe parent foreign key and a trigger that permits one reply level only. Public participant IDs are random profile identifiers, separate from authentication IDs. New mention, notification and preference tables have RLS enabled; all endpoints validate Neon Auth sessions and scope account operations to the session user.
+
+All 35 automated tests pass, including whole-name mention matching, overlapping names, tombstone privacy and reply projection. The rollback-only database suite `db/tests/threads_notifications.sql` passed against Neon and confirmed zero committed fixtures. It exercises self suppression, idempotent likes, the master switch, comments/replies and mention switches, parent-author delivery, mention priority without duplicate alerts, thread-only recipients, nesting rejection, retained replies after parent removal, private-recipe suppression and the JSON recipient insert used by the server. No real account received those fixture alerts.
+
+Preview `dpl_CobdCacaTnWL8AUUoWYJaxquo3yo` passed the clean install, 35 tests, TypeScript and production build. The previously authorized review account verified the real inbox, individual settings persisting after reload, the master switch disabling channel controls, a saved reply beneath the existing parent, and a second post from the main form appearing as a separate parent. Preferences were restored to enabled, the test recipe was returned to private, and the account was signed out. The original meal plan still contains two meals. Generic test posts remain attached to the private test recipe.
+
+Preview `dpl_AFMz6d9qeoh6DabDRx4kXPvdizwe` passed the same clean checks and included a preview-only component fixture route. It verified choosing Cedar and Maple from a thread picker, two highlighted mentions in a single flat reply with the original parent ID, marking an inbox as read, and navigation to the matching recipe/thread. A 390 × 844 review showed no horizontal overflow in the replies or inbox; the viewport was reset. Browser warning/error logs were empty on that fixture. The fixture route is not in the repository or production release.
+
+A second account was not created; the optional authorization question did not receive a specific approval. Cross-account delivery was checked through the actual database functions inside rolled-back test transactions, while browser checks used the existing authorized account and synthetic participants. Later source refinements preserve mention labels through display-name changes and wrap long participant names and recipe titles. Notifications are in-app only, refresh while visible and on focus, and include individual/master controls under Notification preferences.
+
 ## Community update — 2026-10-30
 
 Applied additive migration `db/006_community.sql`. All five existing recipes remained private; no existing recipe or account was opted into public sharing. The three community tables have RLS enabled, foreign keys cascade from permanently deleted recipes, and community reads/writes remain server-only.

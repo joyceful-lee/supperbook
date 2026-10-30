@@ -1,0 +1,30 @@
+"use client";
+import { useEffect,useState,type FormEvent } from 'react';
+import { Bell,LoaderCircle } from 'lucide-react';
+import type { NotificationPreferences } from '@/lib/threads';
+type Notification={id:string;kind:'like'|'comment'|'reply'|'mention';recipeId:string;recipeTitle:string;actorName:string;threadId:string|null;createdAt:string;read:boolean};
+type Inbox={notifications:Notification[];preferences:NotificationPreferences;unreadCount:number;nextCursor:string|null};
+export async function notificationRequest<T=unknown>(input:string|Record<string,unknown>):Promise<T> {
+ const response=await fetch('/api/notifications'+(typeof input==='string'?input:''),{cache:'no-store',signal:AbortSignal.timeout(20000),...(typeof input==='string'?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)})});
+ const result=await response.json();if(!response.ok)throw new Error(result.error||'Notifications could not be loaded.');return result;
+}
+export default function Notifications({onOpen,onRefresh,request=notificationRequest}:{request?:typeof notificationRequest;onOpen:(recipeId:string,threadId:string|null)=>void;onRefresh:()=>void}) {
+ const [data,setData]=useState<Inbox|null>(null),[preferences,setPreferences]=useState<NotificationPreferences|null>(null),[loading,setLoading]=useState(true),[working,setWorking]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ async function load(){const result=await request<Inbox>('');setData(result);return result;}
+ useEffect(()=>{let active=true;void request<Inbox>('').then(result=>{if(active){setData(result);setPreferences(result.preferences);}}).catch(error=>{if(active)setError(error.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[request]);
+ async function save(event:FormEvent){event.preventDefault();setWorking('settings');setError('');try{await request({action:'preferences',preferences});await load();onRefresh();setNotice('Notification preferences saved.');}catch(error){setError((error as Error).message);}finally{setWorking('');}}
+ async function read(item?:Notification){setWorking(item?.id||'readAll');setError('');try{await request(item?{action:'read',id:item.id}:{action:'readAll'});onRefresh();if(item)onOpen(item.recipeId,item.threadId);else{await load();setNotice('All notifications marked as read.');}}catch(error){setError((error as Error).message);}finally{setWorking('');}}
+ async function more(){if(!data?.nextCursor)return;setWorking('more');try{const result=await notificationRequest<Inbox>('?cursor='+encodeURIComponent(data.nextCursor));setData(old=>old?{...result,notifications:[...old.notifications,...result.notifications.filter(item=>!old.notifications.some(existing=>existing.id===item.id))]}:result);}catch(error){setError((error as Error).message);}finally{setWorking('');}}
+ return <div className="notifications"><p className="community-intro">Likes, conversations and mentions from the public recipe book are gathered here.</p>
+  {error&&<div className="error-banner" role="alert">{error}<button className="inline-link" onClick={()=>{setError('');void load().then(result=>setPreferences(result.preferences)).catch(error=>setError(error.message));}}>Try again</button></div>}
+  {notice&&<p className="discovery-status" role="status">{notice}</p>}
+  {preferences&&<details className="notification-settings"><summary>Notification preferences</summary><form onSubmit={save}>
+   <label><input type="checkbox" checked={preferences.enabled} disabled={!!working} onChange={event=>setPreferences({...preferences,enabled:event.target.checked})}/>Receive in-app notifications</label>
+   <fieldset disabled={!preferences.enabled||!!working}><legend>Notify me about</legend><label><input type="checkbox" checked={preferences.likes} onChange={event=>setPreferences({...preferences,likes:event.target.checked})}/>Likes on my recipes</label><label><input type="checkbox" checked={preferences.comments} onChange={event=>setPreferences({...preferences,comments:event.target.checked})}/>Comments on my recipes and replies to my comments</label><label><input type="checkbox" checked={preferences.mentions} onChange={event=>setPreferences({...preferences,mentions:event.target.checked})}/>Mentions in a thread</label></fieldset>
+   <p>These settings control new notifications. Existing notifications stay in your inbox. Notifications for recipes that are no longer public are hidden.</p><button className="primary" disabled={!!working}>Save notification preferences</button>
+  </form></details>}
+  <div className="notification-toolbar"><span>{data?.unreadCount||0} unread</span><button className="text-button" disabled={!!working||!data?.unreadCount} onClick={()=>read()}>Mark all as read</button><button className="text-button" disabled={!!working} onClick={async()=>{setError('');try{await load();onRefresh();}catch(error){setError((error as Error).message);}}}>Refresh</button></div>
+  {loading?<div className="empty" role="status"><LoaderCircle className="spin"/><p>Opening your notifications…</p></div>:data?.notifications.length?<ul className="notification-list">{data.notifications.map(item=><li key={item.id} data-unread={!item.read}><button disabled={!!working} onClick={()=>read(item)}><Bell size={17}/><span><strong>{item.actorName}</strong> {item.kind==='like'?'liked':item.kind==='mention'?'mentioned you in a thread on':item.kind==='reply'?'replied to your comment on':'commented on'} <em>{item.recipeTitle}</em><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}{!item.read?' · Unread':''}</time></span></button></li>)}</ul>:!error&&<div className="empty"><h2>You’re all caught up</h2><p>New likes, comments, replies and mentions will appear here when other cooks join the conversation.</p></div>}
+  {data?.nextCursor&&<button className="outline community-more" disabled={!!working} onClick={more}>Load earlier notifications</button>}
+ </div>;
+}

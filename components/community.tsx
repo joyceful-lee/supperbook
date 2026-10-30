@@ -1,19 +1,20 @@
 "use client";
-import { useCallback,useEffect,useRef,useState,type FormEvent } from 'react';
+import { useCallback,useEffect,useRef,useState } from 'react';
 import { ArrowLeft,Heart,Link2,LoaderCircle,MessageCircle,Search } from 'lucide-react';
 import FoodImage from './food-image';
+import CommentThread,{CommentComposer} from './comment-thread';
 import { communityRequest } from '@/lib/community-client';
 import type { PublicRecipe,PublicComment } from '@/lib/community';
 import { amount,type Recipe } from '@/lib/domain';
-type Props={onManage:(id:string)=>void;isSignedIn:boolean;requireUser:()=>boolean;onSave:(recipe:Recipe)=>void;recipeId?:string;onSelect:(id:string)=>void};
+type Props={onManage:(id:string)=>void;isSignedIn:boolean;requireUser:()=>boolean;onSave:(recipe:Recipe)=>void;recipeId?:string;onSelect:(id:string)=>void;initialThreadId?:string};
 type Feed={recipes:PublicRecipe[];nextCursor:string|null;viewerName:string};
 type Detail={recipe:PublicRecipe;comments:PublicComment[];nextCommentCursor:string|null;viewerName:string};
 function Like({recipe,working,onClick}:{recipe:PublicRecipe;working:boolean;onClick:()=>void}) {
  return <button className="community-like" disabled={working} aria-pressed={recipe.likedByViewer} aria-label={`${recipe.likedByViewer?'Unlike':'Like'} ${recipe.title}`} onClick={onClick}><Heart size={16} fill={recipe.likedByViewer?'currentColor':'none'}/><span>{recipe.likeCount} {recipe.likeCount===1?'like':'likes'}</span></button>;
 }
-export default function Community({onManage,isSignedIn,requireUser,onSave,recipeId='',onSelect}:Props) {
+export default function Community({onManage,isSignedIn,requireUser,onSave,recipeId='',onSelect,initialThreadId}:Props) {
  const [query,setQuery]=useState('');
- return recipeId?<CommunityDetail key={recipeId} id={recipeId} onManage={onManage} isSignedIn={isSignedIn} requireUser={requireUser} onSave={onSave} onBack={()=>onSelect('')}/>:<CommunityFeed query={query} setQuery={setQuery} requireUser={requireUser} onOpen={onSelect}/>;
+ return recipeId?<CommunityDetail key={recipeId} id={recipeId} initialThreadId={initialThreadId} onManage={onManage} isSignedIn={isSignedIn} requireUser={requireUser} onSave={onSave} onBack={()=>onSelect('')}/>:<CommunityFeed query={query} setQuery={setQuery} requireUser={requireUser} onOpen={onSelect}/>;
 }
 function CommunityFeed({query,setQuery,requireUser,onOpen}:{query:string;setQuery:(value:string)=>void;requireUser:()=>boolean;onOpen:(id:string)=>void}) {
  const [search,setSearch]=useState(query),[data,setData]=useState<Feed|null>(null),[loading,setLoading]=useState(true),[working,setWorking]=useState(''),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
@@ -46,22 +47,16 @@ function CommunityFeed({query,setQuery,requireUser,onOpen}:{query:string;setQuer
   </>:<div className="empty"><h2>{query?'No shared recipes match your search':'The community recipe book is open'}</h2><p>{query?'Try another recipe name.':'To share something from your kitchen, open a saved recipe and choose Share publicly. Your recipes stay private until you publish them.'}</p></div>}
  </div>;
 }
-function CommunityDetail({id,onManage,isSignedIn,requireUser,onSave,onBack}:{id:string;onManage:(id:string)=>void;isSignedIn:boolean;requireUser:()=>boolean;onSave:(recipe:Recipe)=>void;onBack:()=>void}) {
+function CommunityDetail({id,onManage,isSignedIn,requireUser,onSave,onBack,initialThreadId}:{initialThreadId?:string;id:string;onManage:(id:string)=>void;isSignedIn:boolean;requireUser:()=>boolean;onSave:(recipe:Recipe)=>void;onBack:()=>void}) {
  const [data,setData]=useState<Detail|null>(null),[loading,setLoading]=useState(true),[working,setWorking]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [displayName,setDisplayName]=useState(''),[body,setBody]=useState(''),[editing,setEditing]=useState(''),[editBody,setEditBody]=useState(''),[confirmDelete,setConfirmDelete]=useState('');
- const load=useCallback(async()=>{const result=await communityRequest<Detail>('?id='+encodeURIComponent(id));setData(result);setDisplayName(result.viewerName);return result;},[id]);
- useEffect(()=>{let active=true;setLoading(true);void communityRequest<Detail>('?id='+encodeURIComponent(id)).then(result=>{if(active){setData(result);setDisplayName(result.viewerName);}}).catch(error=>{if(active)setError(error.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[id]);
+ const [displayName,setDisplayName]=useState('');
+ const readDetail=useCallback(async()=>{const result=await communityRequest<Detail>('?id='+encodeURIComponent(id));if(initialThreadId&&!result.comments.some(comment=>comment.id===initialThreadId)){const thread=await communityRequest<{root:PublicComment}>('?id='+encodeURIComponent(id)+'&thread='+encodeURIComponent(initialThreadId));result.comments.push(thread.root);}return result;},[id,initialThreadId]);
+ const load=useCallback(async()=>{const result=await readDetail();setData(result);setDisplayName(result.viewerName);return result;},[readDetail]);
+ useEffect(()=>{let active=true;setLoading(true);void readDetail().then(result=>{if(active){setData(result);setDisplayName(result.viewerName);}}).catch(error=>{if(active)setError(error.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[readDetail]);
+ useEffect(()=>{if(!loading&&initialThreadId){const thread=document.getElementById('thread-'+initialThreadId);thread?.scrollIntoView({block:'start'});thread?.focus({preventScroll:true});}},[loading,initialThreadId]);
  async function like() {
   if(!data||!requireUser())return;setWorking('like');setError('');
   try {await communityRequest({action:'like',recipeId:id,liked:!data.recipe.likedByViewer});setData(old=>old?{...old,recipe:{...old.recipe,likedByViewer:!old.recipe.likedByViewer,likeCount:Math.max(0,old.recipe.likeCount+(old.recipe.likedByViewer?-1:1))}}:old);}catch(error){setError((error as Error).message);}finally{setWorking('');}
- }
- async function comment(event:FormEvent) {
-  event.preventDefault();if(!requireUser())return;setWorking('comment');setError('');
-  try {await communityRequest({action:'comment',recipeId:id,displayName,body});setBody('');await load();setNotice('Your comment has been added.');}catch(error){setError((error as Error).message);}finally{setWorking('');}
- }
- async function changeComment(commentId:string,remove=false) {
-  setWorking(commentId);setError('');
-  try {await communityRequest(remove?{action:'deleteComment',commentId}:{action:'editComment',commentId,body:editBody});setEditing('');setConfirmDelete('');await load();setNotice(remove?'Comment removed.':'Comment updated.');}catch(error){setError((error as Error).message);}finally{setWorking('');}
  }
  async function moreComments() {
   if(!data?.nextCommentCursor)return;setWorking('more');setError('');
@@ -84,13 +79,9 @@ function CommunityDetail({id,onManage,isSignedIn,requireUser,onSave,onBack}:{id:
     <div className="community-sources">{data.recipe.sourceUrl&&<a href={data.recipe.sourceUrl} target="_blank" rel="noreferrer">Original recipe · {data.recipe.sourceName||new URL(data.recipe.sourceUrl).hostname}</a>}{data.recipe.externalProvider==='themealdb'&&<a href={'https://www.themealdb.com/meal.php?c='+data.recipe.externalId} target="_blank" rel="noreferrer">Recipe data from TheMealDB</a>}{data.recipe.imageUrl&&<a href={data.recipe.imageUrl} target="_blank" rel="noreferrer">Photo source</a>}</div>
    </article>
    <section className="community-comments"><h2>At the table <span>{data.recipe.commentCount}</span></h2><p>Share a substitution, a cooking note, or a question for the cook.</p>
-    {isSignedIn?<form className="community-comment-form" onSubmit={comment}><label>Your public display name<input required minLength={2} maxLength={60} value={displayName} onChange={event=>setDisplayName(event.target.value)}/></label><label>Your comment<textarea required maxLength={2000} rows={3} value={body} onChange={event=>setBody(event.target.value)}/></label><p className="community-form-note">Comments and your chosen display name are public.</p><button className="primary" disabled={!!working}>{working==='comment'&&<LoaderCircle size={15} className="spin"/>}Post comment</button></form>:<div className="discovery-notice">Sign in to join the conversation. <button className="inline-link" onClick={requireUser}>Sign in to comment</button></div>}
+    {isSignedIn?<CommentComposer recipeId={id} displayName={displayName} onDone={async()=>{await load();setNotice('Your comment has been added.');}}/>:<div className="discovery-notice">Sign in to join the conversation. <button className="inline-link" onClick={requireUser}>Sign in to comment</button></div>}
     {!data.comments.length&&<p className="community-no-comments">No comments yet. There’s room for the first cooking note.</p>}
-    <div>{data.comments.map(comment=><article className="community-comment" key={comment.id}><div className="comment-heading"><strong>{comment.authorName}</strong><time dateTime={new Date(comment.createdAt).toISOString()}>{new Date(comment.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}{comment.updatedAt!==comment.createdAt?' · Edited':''}</time></div>
-     {editing===comment.id?<form onSubmit={event=>{event.preventDefault();void changeComment(comment.id);}}><label>Edit your comment<textarea required maxLength={2000} value={editBody} onChange={event=>setEditBody(event.target.value)}/></label><div className="action-group"><button className="outline" disabled={!!working}>Save comment</button><button className="text-button" type="button" disabled={!!working} onClick={()=>setEditing('')}>Cancel</button></div></form>:<p className="comment-body">{comment.body}</p>}
-     <div className="comment-actions">{comment.canEdit&&editing!==comment.id&&<button className="text-button" disabled={!!working} onClick={()=>{setEditing(comment.id);setEditBody(comment.body);}}>Edit comment</button>}{comment.canDelete&&<button className="text-button danger" disabled={!!working} onClick={()=>setConfirmDelete(comment.id)}>Remove comment</button>}</div>
-     {confirmDelete===comment.id&&<div className="comment-remove-confirm"><p>Remove this comment from the conversation?</p><button className="text-button danger" disabled={!!working} onClick={()=>changeComment(comment.id,true)}>Confirm removal</button><button className="text-button" disabled={!!working} onClick={()=>setConfirmDelete('')}>Keep comment</button></div>}
-    </article>)}</div>
+    <div>{data.comments.map(comment=><CommentThread key={comment.id} root={comment} recipeId={id} displayName={displayName} isSignedIn={isSignedIn} requireUser={requireUser} onChanged={load} initiallyOpen={comment.id===initialThreadId}/>)}</div>
     {data.nextCommentCursor&&<button className="outline community-more" disabled={!!working} onClick={moreComments}>Load earlier comments</button>}
    </section>
   </>}
