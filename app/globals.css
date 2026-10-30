@@ -92,6 +92,13 @@ svg {
   flex-direction: column;
   padding: 39px 23px 20px;
   z-index: 20;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.sidebar > * {
+  flex-shrink: 0;
 }
 .wordmark {
   font-family: var(--serif);
