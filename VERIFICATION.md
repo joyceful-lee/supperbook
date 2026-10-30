@@ -2,6 +2,10 @@
 
 Latest review: October 30, 2026 (America/Los_Angeles).
 
+## Signed-in commenting — 2026-10-30
+
+Verified the live community API without cookies or credentials: creating a comment, posting a reply and editing a comment each returned HTTP 401 with the application sign-in error. Requests targeted a nonexistent recipe/comment ID and created no records. The existing server session gate remains authoritative. Guest controls now explicitly read Sign in to reply, the main notice states that comments and replies require sign-in, and edit/remove/restore controls also require the current signed-in state. Public recipe and discussion reading remains available.
+
 ## Replies, mentions and notifications — 2026-10-30
 
 Applied `db/007_threads_notifications.sql`. Replies have a same-recipe parent foreign key and a trigger that permits one reply level only. Public participant IDs are random profile identifiers, separate from authentication IDs. New mention, notification and preference tables have RLS enabled; all endpoints validate Neon Auth sessions and scope account operations to the session user.
